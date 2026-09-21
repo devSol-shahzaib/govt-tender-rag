@@ -70,3 +70,8 @@ Format: ID, date, decision, why, consequences.
 **Decision:** Pin Node 24 in `engines` and CI. Use Express 5 and Zod 4 rather than the Express 4 and Zod 3 in the portfolio project.
 **Why:** Node 24 matches the local machine, so local and CI cannot drift. Express 5 forwards rejected promises to the error middleware natively, which retires the `asyncHandler` wrapper. Zod 4 avoids a later migration across API validation, env parsing, LLM structured outputs and drizzle-zod, which are the riskiest files to touch once they carry real logic.
 **Consequences:** The portfolio's `asyncHandler` is not ported. `req.query` is a getter in Express 5 and route wildcard syntax differs. Zod 4 compatibility with drizzle-zod and the AI SDK must be proven in F001, not assumed.
+
+### D014 (2026-09-21) Branching: feat -> dev -> prod
+**Decision:** Feature branches `feat/NNN-short-name` are cut from `dev`. Claude Code commits only on the feature branch and never merges. The human merges feature branches into `dev`, and merges `dev` into `prod` at deployment time.
+**Why:** `dev` becomes the staging deploy and `prod` the live one once hosting exists, which matches how Vercel and Railway deploy from a named branch. Keeping merges with the human means no feature reaches shared history without a person reading the diff first.
+**Consequences:** `main` was renamed to `dev`; there is no `main`. The GitHub default branch must be set to `dev` when the repo is first pushed. `prod` will not move until there is something deployed.

@@ -28,7 +28,7 @@ If a step goes sideways, stop, revert with git, and adjust the plan rather than 
 Check every acceptance criterion in the spec. For features that affect answers or retrieval, run the eval (once it exists) and record the numbers.
 
 ### 7. Log and close
-Run `/close-feature FNNN`. Claude Code drafts a build log entry and any doc updates. You approve, it appends to `docs/BUILD_LOG.md`, the spec becomes `Status: Done`, and the branch merges. If the feature produced a decision worth keeping, add it to `docs/DECISIONS.md`.
+Run `/close-feature FNNN`. Claude Code drafts a build log entry and any doc updates. You approve, it appends to `docs/BUILD_LOG.md`, the spec becomes `Status: Done`, and it commits on the feature branch. You merge into `dev` yourself. If the feature produced a decision worth keeping, add it to `docs/DECISIONS.md`.
 
 ## Where things live
 
@@ -50,7 +50,7 @@ Run `/close-feature FNNN`. Claude Code drafts a build log entry and any doc upda
 - No real API calls in tests
 - `ARCHITECTURE.md` updated if structure changed
 - Build log entry written with at least one concrete number or observation
-- Merged to `main` from its feature branch
+- Handed over on its feature branch, ready for the human to merge into `dev`
 
 ## Session tips for Claude Code
 

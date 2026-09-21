@@ -67,9 +67,10 @@ Plus any feature-specific check listed in the spec's acceptance criteria (for ex
 
 ## Git
 
-- One branch per feature: `feat/NNN-short-name`.
+- Branches are `feat/NNN-short-name` -> `dev` -> `prod`. Cut every feature branch from `dev`.
 - Conventional commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`, `refactor:`), one logical change per commit.
-- Commit only after the human approves the step. Never commit directly to `main`.
+- Commit only after the human approves the step, and only on the feature branch.
+- Never commit directly to `dev` or `prod`, and never merge. The human owns both merges.
 
 ## Keeping docs in sync
 
