@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
 
@@ -28,6 +29,14 @@ export function baseConfig(tsconfigRootDir) {
         '@typescript-eslint/no-non-null-assertion': 'error',
         'no-console': 'warn',
       },
+    },
+
+    // Config and tooling files in a package are plain JS outside its tsconfig, so
+    // type-aware rules cannot run on them and error out if they are left enabled.
+    {
+      files: ['**/*.js', '**/*.mjs'],
+      extends: [tseslint.configs.disableTypeChecked],
+      languageOptions: { globals: { ...globals.node } },
     },
 
     // Must stay last: switches off every rule that would fight Prettier.
