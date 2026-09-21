@@ -21,12 +21,28 @@ export function baseConfig(tsconfigRootDir) {
     {
       files: ['**/*.ts', '**/*.tsx'],
       languageOptions: {
-        parserOptions: { projectService: true, tsconfigRootDir },
+        parserOptions: {
+          // Config files sit outside each package's tsconfig `include`, which is
+          // scoped to src. Without this they have no type information and the parser
+          // refuses them.
+          projectService: { allowDefaultProject: ['*.config.ts'] },
+          tsconfigRootDir,
+        },
       },
       rules: {
         // CLAUDE.md forbids both outright, so they are errors rather than warnings.
         '@typescript-eslint/no-explicit-any': 'error',
         '@typescript-eslint/no-non-null-assertion': 'error',
+        // Express identifies error handlers by arity, so unused-but-required
+        // parameters are a fact of the framework. The underscore marks intent.
+        '@typescript-eslint/no-unused-vars': [
+          'error',
+          {
+            argsIgnorePattern: '^_',
+            varsIgnorePattern: '^_',
+            caughtErrorsIgnorePattern: '^_',
+          },
+        ],
         'no-console': 'warn',
       },
     },

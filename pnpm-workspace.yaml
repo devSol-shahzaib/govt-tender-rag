@@ -1,3 +1,8 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
+# tsx depends on esbuild, whose postinstall puts the platform binary in place.
+# Without this, pnpm blocks the script and tsx cannot run.
+allowBuilds:
+  esbuild: true
