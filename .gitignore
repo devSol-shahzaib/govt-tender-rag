@@ -1,0 +1,15 @@
+node_modules/
+.next/
+dist/
+.turbo/
+coverage/
+.env
+.env.local
+.env.*.local
+.DS_Store
+
+# Corpus PDFs stay out of git (re-downloadable from sources.csv).
+# A small fixed subset for CI will be added later.
+corpus/**/*.pdf
+!corpus/sources.csv
+!corpus/corpus-audit.csv
