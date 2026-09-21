@@ -1,0 +1,20 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: tender-db
+    environment:
+      POSTGRES_USER: tender
+      POSTGRES_PASSWORD: tender_local_dev
+      POSTGRES_DB: tender_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - tender-db-data:/var/lib/postgresql/data
+      - ./scripts/db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tender -d tender_dev"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  tender-db-data:
