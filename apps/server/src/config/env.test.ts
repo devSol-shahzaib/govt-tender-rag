@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig, resetConfig } from './env.js';
 
-const validEnv = { CLIENT_ORIGIN: 'http://localhost:3000' };
+const validEnv = {
+  CLIENT_ORIGIN: 'http://localhost:3000',
+  DATABASE_URL: 'postgresql://tender_app:pw@localhost:5432/tender_dev',
+};
 
 beforeEach(() => {
   resetConfig();
@@ -27,6 +30,14 @@ describe('loadConfig', () => {
 
   it('fails when CLIENT_ORIGIN is missing, naming the variable', () => {
     expect(() => loadConfig({})).toThrowError(/CLIENT_ORIGIN/);
+  });
+
+  it('applies the connection string rule from @tender/db', () => {
+    // Proves the workspace dependency resolves and its schema actually runs here,
+    // rather than the server quietly accepting any string.
+    expect(() =>
+      loadConfig({ ...validEnv, DATABASE_URL: 'mysql://user@host:3306/db' }),
+    ).toThrowError(/DATABASE_URL/);
   });
 
   it('names a bad variable without echoing its value', () => {

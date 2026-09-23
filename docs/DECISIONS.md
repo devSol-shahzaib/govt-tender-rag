@@ -75,3 +75,18 @@ Format: ID, date, decision, why, consequences.
 **Decision:** Feature branches `feat/NNN-short-name` are cut from `dev`. Claude Code commits only on the feature branch and never merges. The human merges feature branches into `dev`, and merges `dev` into `prod` at deployment time.
 **Why:** `dev` becomes the staging deploy and `prod` the live one once hosting exists, which matches how Vercel and Railway deploy from a named branch. Keeping merges with the human means no feature reaches shared history without a person reading the diff first.
 **Consequences:** `main` was renamed to `dev`; there is no `main`. The GitHub default branch must be set to `dev` when the repo is first pushed. `prod` will not move until there is something deployed.
+
+### D015 (2026-09-23) TypeScript pinned to 6, not 7
+**Decision:** Pin TypeScript 6.0.3 across the workspace, although 7.0.2 is the current release.
+**Why:** typescript-eslint 8.70 declares a peer range of `>=4.8.4 <6.1.0`, and only alpha builds go further. Type-aware linting catches unawaited promises, which is the failure mode that loses a page silently in the ingestion pipeline. That is worth more than the faster native compiler.
+**Consequences:** Revisit when typescript-eslint supports 7. A future session must not "helpfully" upgrade to latest, because the break is a lint crash rather than a type error.
+
+### D016 (2026-09-23) ESLint pinned to 9 across the workspace
+**Decision:** Pin ESLint 9.39.5 and `@eslint/js` 9.39.5 for every package.
+**Why:** `eslint-config-next` depends on `eslint-plugin-react` 7.37.5, which calls `context.getFilename()`, removed in ESLint 10. 7.37.5 is the latest release, so there is nothing to override to. Keeping Next's rules matters more than the newer major, and one ESLint version across the repo beats a per-package split.
+**Consequences:** `eslint-config-next` declares `eslint >=9.0.0`, which is wrong given its own dependency tree caps at `^9.7`. That false declaration is why pnpm installed it without a warning, so peer ranges in this area cannot be trusted. Revisit when eslint-plugin-react supports ESLint 10.
+
+### D017 (2026-09-23) packages/ is for server-side sharing, and exports built output
+**Decision:** `packages/` exists so `apps/server`, the Module 2 eval runner and the Module 5 MCP server can share retrieval, answer generation, the LLM gateway and the schema. Packages compile with `tsc` and export `dist` with declarations, never raw TypeScript. `apps/client` depends on no workspace package.
+**Why:** An eval only means something if it runs the same code as production. If that code lived in `apps/server/src/`, the eval package would import from an app, inverting the rule that packages never import from apps. Exporting raw TypeScript works under tsx, vitest and Next but breaks a compiled production server, and fixing it later means unpicking code already written against the wrong entry point. Keeping the client free of workspace dependencies stops a gateway holding API keys from ever reaching a browser bundle, and leaves the client independently deployable.
+**Consequences:** `pnpm build` must run before `pnpm typecheck` from a clean tree, and CI does so. Each package carries a `tsconfig.build.json` that excludes tests from `dist` while the default config keeps them visible to typecheck and type-aware lint. Client and server stay separately deployable: Vercel builds the client from its own root directory, and the server builds with a pnpm filter or `pnpm deploy`.

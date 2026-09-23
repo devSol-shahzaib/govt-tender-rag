@@ -2,7 +2,9 @@
 
 This file describes the system as it is, plus what's planned. Sections marked **(planned)** don't exist yet. Update this file whenever structure, data flow or package boundaries change.
 
-## Repository layout (planned, created in F001)
+## Repository layout
+
+Sections marked **(planned)** do not exist yet. Everything else was created in F001.
 
 ```
 tender-rag-project/
@@ -15,25 +17,45 @@ tender-rag-project/
     corpus-audit.csv
   scripts/                   one-off and maintenance scripts
     audit-corpus.mjs
+    db-init/                 extensions and app role, run on first container boot
+  docker-compose.yml         local Postgres 17 with pgvector
+  .github/workflows/ci.yml   build, typecheck, lint, test, format on dev and prod
+  pnpm-workspace.yaml
+  tsconfig.base.json         strict options shared by every package
+  eslint.base.mjs            shared rules; each package has its own eslint.config.mjs
   apps/
-    client/                  Next.js App Router: chat UI, citation viewer, admin
+    client/                  Next.js App Router
+      app/                   chat UI, citation viewer, admin (planned, F010)
+      lib/health.ts          reads the server health endpoint from the browser
     server/                  Node backend: HTTP API and ingestion jobs
-      src/config/            env (Zod validated), logger, cors, db
-      src/middleware/        errorHandler, validate, requestLogger, rateLimiters
-      src/modules/           documents, ingestion, retrieval, answers
-      src/jobs/              pg-boss handlers
+      src/config/            env (Zod validated), logger, cors
+      src/middleware/        errorHandler, validate, requestLogger
+      src/modules/           health; documents, ingestion, retrieval, answers (planned)
+      src/jobs/              pg-boss handlers (planned, F004)
       src/utils/             AppError and shared helpers
   packages/
     core/                    domain logic: retrieval, answer generation, prompts, LLM gateway
+      src/config/models.ts   model IDs, read from env
       src/llm/               the only place that calls model or embedding APIs
       src/prompts/           versioned prompt files
-    db/                      Drizzle schema, migrations, typed queries
+    db/                      connection string rules; Drizzle schema and queries (F002)
     evals/                   eval runner and golden sets (Module 2)
     mcp-server/              MCP server exposing tender tools (Module 5)
   .claude/commands/          custom Claude Code commands
 ```
 
 Monorepo with pnpm workspaces. Apps depend on packages; packages never import from apps.
+
+Packages compile with `tsc` and export `dist` with declarations, never raw TypeScript, so a
+compiled production server can consume them (D017). `pnpm build` therefore runs before
+`pnpm typecheck` from a clean tree, and CI does so in that order. Each package carries a
+`tsconfig.build.json` that keeps tests out of `dist` while the default config keeps them
+visible to typecheck and type-aware lint.
+
+`packages/` exists so the server, the Module 2 eval runner and the Module 5 MCP server share
+one copy of retrieval, answer generation and the schema. The client depends on no workspace
+package, which keeps it independently deployable and keeps the LLM gateway out of any browser
+bundle.
 
 The client holds no model or database credentials. It calls the server over HTTP and renders
 streamed answers. Each module folder keeps its own routes, controller, service and validation,
@@ -43,7 +65,7 @@ with the database schema in `packages/db` rather than per module.
 
 | Layer | Choice |
 |---|---|
-| Language | TypeScript (strict), pnpm workspaces |
+| Language | TypeScript 6 (strict), pnpm workspaces, Node 24 |
 | Client | Next.js App Router, React, Tailwind, shadcn/ui |
 | Server | Node 24, TypeScript, Express 5, HTTP API with streaming |
 | AI SDK | Vercel AI SDK (streaming, tool calling, structured output) |
@@ -55,7 +77,7 @@ with the database schema in `packages/db` rather than per module.
 | PDF | pdf.js for text layer, OpenAI vision for pages without text |
 | Auth | Better Auth with organisations, Postgres row-level security |
 | Tracing | Langfuse (Module 1) |
-| Tests | Vitest, Playwright |
+| Tests | Vitest, Playwright (planned) |
 | CI | GitHub Actions |
 | Hosting | Vercel (client), Railway or Fly.io (server), Neon (DB) |
 
@@ -89,7 +111,10 @@ question ──► query processing (cheap model, optional)
 
 ## Current state
 
-Nothing built yet. Corpus collected and audited.
+F001 done: pnpm workspace with two apps and two packages, strict TypeScript, ESLint 9 and
+Prettier, Vitest, an Express 5 server with a health route and the middleware stack, a skeleton
+client that proves the cross-origin path, and a CI workflow. No database schema, no model
+calls, no UI yet.
 
 Local Postgres 17.11 runs in Docker (container `tender-db`, database `tender_dev`) with the
 `vector` and `pg_trgm` extensions loaded. The app connects as a non-superuser role so that

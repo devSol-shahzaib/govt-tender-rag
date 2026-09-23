@@ -1,3 +1,4 @@
+import { databaseUrlSchema } from '@tender/db';
 import { z } from 'zod';
 
 const envSchema = z.object({
@@ -10,6 +11,10 @@ const envSchema = z.object({
   // talk at all (D011), and guessing an origin here would fail at request time in the
   // browser instead of at startup where it is obvious.
   CLIENT_ORIGIN: z.url(),
+  // Reuses the rule from packages/db rather than restating it, so the server, the
+  // migration tooling and the Module 2 eval runner cannot disagree about what a valid
+  // connection string is.
+  DATABASE_URL: databaseUrlSchema,
   // IP addresses are personal data, so request logs omit them by default. Enable
   // temporarily when investigating abuse.
   LOG_CLIENT_IP: z

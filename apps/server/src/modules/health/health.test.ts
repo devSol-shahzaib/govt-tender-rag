@@ -7,7 +7,10 @@ let app: ReturnType<typeof createApp>;
 
 beforeAll(() => {
   resetConfig();
-  loadConfig({ CLIENT_ORIGIN: 'http://localhost:3000' });
+  loadConfig({
+    CLIENT_ORIGIN: 'http://localhost:3000',
+    DATABASE_URL: 'postgresql://u:p@localhost:5432/tender_dev',
+  });
   app = createApp();
 });
 

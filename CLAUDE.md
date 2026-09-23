@@ -58,10 +58,15 @@ These are the point of the project. Follow them even when a shortcut looks harml
 ## Checks to run before reporting a step as complete
 
 ```
+pnpm build
 pnpm typecheck
 pnpm lint
 pnpm test
+pnpm format:check
 ```
+
+`build` comes first: packages export compiled output, so from a clean tree nothing can be
+typechecked until their declarations exist. This is the same order CI runs.
 
 Plus any feature-specific check listed in the spec's acceptance criteria (for example an eval run or a script output). Paste the relevant output.
 
