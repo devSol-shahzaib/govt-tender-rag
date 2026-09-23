@@ -4,5 +4,8 @@ packages:
 
 # tsx depends on esbuild, whose postinstall puts the platform binary in place.
 # Without this, pnpm blocks the script and tsx cannot run.
+# Next.js pulls these in but does not need their build scripts for this app.
 allowBuilds:
   esbuild: true
+  sharp: false
+  unrs-resolver: false
