@@ -13,7 +13,7 @@ Turn the current folder of docs and PDFs into a working pnpm monorepo where `pnp
 ## Scope
 - pnpm workspace: `apps/server`, `apps/client`, `packages/core`, `packages/db`
 - Shared strict `tsconfig.base.json`, extended per package
-- ESLint flat config and Prettier, ported from the portfolio project and extended with React rules for the client
+- ESLint flat config and Prettier, with React rules for the client
 - Vitest with one real test per package
 - Server: Express 5, `config/env.ts` validating env through Zod 4, `GET /api/health`, pino request logging with a request id, `AppError` hierarchy, `errorHandler`, `validate` middleware, CORS configured against `CLIENT_ORIGIN`
 - Client: `create-next-app`, one page that fetches `/api/health` and renders the status. Nothing else.
@@ -32,8 +32,6 @@ Turn the current folder of docs and PDFs into a working pnpm monorepo where `pnp
 - Docker for the app. The database container already exists and stays as is.
 
 ## Approach
-Port the portfolio server's conventions with the deltas agreed in D011 and D013: no Mongoose, one pnpm workspace instead of side-by-side npm projects, no Vercel serverless adapter.
-
 The client is a walking skeleton. It exists to prove the cross-origin path that D011 creates, meaning CORS preflight and a fetch from the Next.js origin to the Express origin, on day one rather than at F010. It also means lint and tsconfig are configured once for both apps instead of reconciled later.
 
 Express 5 forwards rejected promises to the error middleware natively, so `asyncHandler` is not ported. Routes register handlers directly.
