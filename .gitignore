@@ -3,6 +3,9 @@ node_modules/
 dist/
 .turbo/
 coverage/
+
+# TypeScript incremental build cache. Machine specific and regenerated on demand.
+*.tsbuildinfo
 .env
 .env.local
 .env.*.local
