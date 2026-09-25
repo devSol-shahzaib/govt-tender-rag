@@ -1,10 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist",
     "declaration": false,
-    "declarationMap": false
+    "declarationMap": false,
+    "paths": {
+      "@tender/core": ["../../packages/core/src/index.ts"],
+      "@tender/db": ["../../packages/db/src/index.ts"]
+    }
   },
   "include": ["src"]
 }

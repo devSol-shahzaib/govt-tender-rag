@@ -17,7 +17,8 @@ tender-rag-project/
     corpus-audit.csv
   scripts/                   one-off and maintenance scripts
     audit-corpus.mjs
-    db-init/                 extensions and app role, run on first container boot
+    create-app-role.sql      unprivileged app role and grants; takes the password as a variable
+    db-init/                 extensions, run on first container boot
   docker-compose.yml         local Postgres 17 with pgvector
   .github/workflows/ci.yml   build, typecheck, lint, test, format on dev and prod
   pnpm-workspace.yaml
@@ -38,7 +39,10 @@ tender-rag-project/
       src/config/models.ts   model IDs, read from env
       src/llm/               the only place that calls model or embedding APIs
       src/prompts/           versioned prompt files
-    db/                      connection string rules; Drizzle schema and queries (F002)
+    db/                      connection string rules, Drizzle schema, migrations
+      src/schema/            tenants, tenders, documents, pages, chunks
+      src/client.ts          opens a connection; callers own closing it
+      drizzle/               generated migrations, applied by a privileged role
     evals/                   eval runner and golden sets (Module 2)
     mcp-server/              MCP server exposing tender tools (Module 5)
   .claude/commands/          custom Claude Code commands
@@ -85,7 +89,9 @@ with the database schema in `packages/db` rather than per module.
 
 ### Ingestion
 ```
-sources.csv ──► documents table (one row per file, with tender_id, doc_type, version)
+sources.csv ──► tenders + documents (one document row per file, grouped by tender)
+            ──► amendment order comes from documents.published_on alone, never from
+                doc_type or the manifest's free-text version label (D004)
 PDF ──► per-page text (pdf.js) ──► pages without text go to OCR (vision model)
     ──► pages table (document_id, physical page number, text, extraction method)
     ──► chunks table (text, page range, section heading, token count)
@@ -113,9 +119,13 @@ question ──► query processing (cheap model, optional)
 
 F001 done: pnpm workspace with two apps and two packages, strict TypeScript, ESLint 9 and
 Prettier, Vitest, an Express 5 server with a health route and the middleware stack, a skeleton
-client that proves the cross-origin path, and a CI workflow. No database schema, no model
-calls, no UI yet.
+client that proves the cross-origin path, and a CI workflow.
 
-Local Postgres 17.11 runs in Docker (container `tender-db`, database `tender_dev`) with the
-`vector` and `pg_trgm` extensions loaded. The app connects as a non-superuser role so that
-row-level security behaves locally the way it will on Neon.
+F002 done: Drizzle schema and migrations for `tenants`, `tenders`, `documents`, `pages` and
+`chunks`, every table carrying `tenant_id`. CI runs migrations against a Postgres service
+container and asserts the extensions exist. No rows yet, no model calls, no UI.
+
+Local Postgres 17.11 runs in Docker (container `tender-db`, databases `tender_dev` and
+`tender_test`) with the `vector` and `pg_trgm` extensions loaded. Two roles: migrations use a
+privileged one because pgvector is not a trusted extension, and the application uses a
+non-superuser role so row-level security behaves locally the way it will on Neon (D018).

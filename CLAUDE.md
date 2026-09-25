@@ -65,8 +65,10 @@ pnpm test
 pnpm format:check
 ```
 
-`build` comes first: packages export compiled output, so from a clean tree nothing can be
-typechecked until their declarations exist. This is the same order CI runs.
+`build` stays first because it is what production consumes, so a break there should fail
+before anything else runs. It is no longer a prerequisite: dev, typecheck and tests resolve
+workspace packages to source, so a clean tree with no `dist` still passes. This is the same
+order CI runs.
 
 Plus any feature-specific check listed in the spec's acceptance criteria (for example an eval run or a script output). Paste the relevant output.
 
