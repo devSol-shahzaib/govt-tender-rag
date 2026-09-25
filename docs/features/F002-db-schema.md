@@ -1,6 +1,6 @@
 # F002: Database schema and pgvector setup
 
-**Status:** Approved
+**Status:** Done
 **Module:** 0
 **Branch:** feat/002-db-schema
 
@@ -57,4 +57,14 @@ Migration runtime on an empty database, and the `\dt` and `\di` output, recorded
 4. `CREATE EXTENSION` from a migration needs confirming on Neon before F006 depends on it.
 
 ## Notes from the build
-Filled in during and after building.
+All acceptance criteria met except one. The CI workflow is written and its file
+references are verified, but it has never executed, because the repository has no remote
+yet. A workflow that has not run is an untested script, so that criterion is recorded as
+partly met rather than ticked.
+
+Three things changed during the build and are recorded as decisions. D018 splits the
+migration role from the application role, because pgvector is not a trusted extension
+while the app role must not be a superuser. D019 resolves workspace packages to source
+in dev and tests, superseding D017's requirement to build first. The app role script
+moved out of `scripts/db-init/` and takes its password as a variable, which removed a
+credential from git.
