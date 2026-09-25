@@ -87,12 +87,8 @@
           "name": "chunks_tenant_id_tenants_id_fk",
           "tableFrom": "chunks",
           "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -100,12 +96,8 @@
           "name": "chunks_document_id_documents_id_fk",
           "tableFrom": "chunks",
           "tableTo": "documents",
-          "columnsFrom": [
-            "document_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -263,12 +255,8 @@
           "name": "documents_tenant_id_tenants_id_fk",
           "tableFrom": "documents",
           "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -276,12 +264,8 @@
           "name": "documents_tender_id_tenders_id_fk",
           "tableFrom": "documents",
           "tableTo": "tenders",
-          "columnsFrom": [
-            "tender_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tender_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -370,12 +354,8 @@
           "name": "pages_tenant_id_tenants_id_fk",
           "tableFrom": "pages",
           "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -383,12 +363,8 @@
           "name": "pages_document_id_documents_id_fk",
           "tableFrom": "pages",
           "tableTo": "documents",
-          "columnsFrom": [
-            "document_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -508,12 +484,8 @@
           "name": "tenders_tenant_id_tenants_id_fk",
           "tableFrom": "tenders",
           "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -529,22 +501,12 @@
     "public.doc_type": {
       "name": "doc_type",
       "schema": "public",
-      "values": [
-        "bidding_document",
-        "corrigendum",
-        "addendum",
-        "revised",
-        "prebid_minutes",
-        "boq"
-      ]
+      "values": ["bidding_document", "corrigendum", "addendum", "revised", "prebid_minutes", "boq"]
     },
     "public.extraction_method": {
       "name": "extraction_method",
       "schema": "public",
-      "values": [
-        "text_layer",
-        "ocr"
-      ]
+      "values": ["text_layer", "ocr"]
     }
   },
   "schemas": {},

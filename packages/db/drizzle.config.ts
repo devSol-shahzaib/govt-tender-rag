@@ -1,19 +1,20 @@
 import { config } from 'dotenv';
 import { defineConfig } from 'drizzle-kit';
 
-// DATABASE_URL lives with the server rather than being duplicated here, so there is
-// one copy of the credential and no way for the two to drift.
-config({ path: '../../apps/server/.env' });
+config({ path: './.env' });
 
 // Migrations run as a privileged role, not as the app. pgvector is not a trusted
 // extension, so CREATE EXTENSION needs superuser, while the app's own role is
 // deliberately not one: superusers bypass row-level security, which would make F012's
 // tenant policies look like they work while enforcing nothing.
-const databaseUrl = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
+// No fallback to the app's DATABASE_URL. That role is deliberately not a superuser, so
+// falling back to it would fail on CREATE EXTENSION with an error drizzle-kit swallows
+// entirely: a spinner, exit code 1, and no message.
+const databaseUrl = process.env.MIGRATION_DATABASE_URL;
 
 if (databaseUrl === undefined || databaseUrl === '') {
   throw new Error(
-    'Neither MIGRATION_DATABASE_URL nor DATABASE_URL is set. Copy apps/server/.env.example to .env first.',
+    'MIGRATION_DATABASE_URL is not set. Copy packages/db/.env.example to .env first.',
   );
 }
 
