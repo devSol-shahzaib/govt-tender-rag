@@ -1,6 +1,6 @@
 # F003: Corpus manifest import
 
-**Status:** Approved
+**Status:** Done
 **Module:** 0
 **Branch:** feat/003-manifest-import
 
@@ -54,5 +54,35 @@ Import runtime for 66 files, row counts per table, and the run report, recorded 
 2. `csv-parse` is a new dependency, approved. The manifest has quoted fields containing commas and quotes, so splitting on commas by hand is not safe.
 3. The upsert needs a unique index on `(tenant_id, file_path)`, which exists as `documents_tenant_path_idx`.
 
+## Handover to F009: same-day documents need a tie-break
+
+Sorting a tender's documents by `published_on` alone leaves ties. `kphealth_bemonc-516119`
+has an addendum and a set of pre-bid minutes both dated 18 May 2026:
+
+```
+2026-05-18  addendum         addendum2
+2026-05-18  prebid_minutes   prebid2
+2026-05-08  corrigendum      corr2
+2026-04-27  prebid_minutes   prebid1
+2026-04-21  corrigendum      corr1
+2026-02-24  bidding_document original
+```
+
+D004 says the latest amendment wins, and on that date two documents tie. The ordering key
+is correct and stays as it is; what is missing is a rule for which of two same-day
+documents is authoritative when they disagree. That belongs with answer generation, where
+the conflict actually surfaces, so it is F009's to decide rather than something the
+importer should guess at.
+
 ## Notes from the build
-Filled in during and after building.
+All ten acceptance criteria met.
+
+The duplicate-rejection path is unreachable with the current corpus, because the `test_`
+and blank `tender_id` rules remove both copies before the content hash is consulted. It is
+covered by a fixture that constructs two conventionally named files with identical bytes.
+Writing that fixture found the path was broken: drizzle wraps driver errors, so the
+Postgres `code` and `constraint_name` sit on `cause` rather than on the error itself.
+
+The server could not import `drizzle-orm` under pnpm's strict layout. Rather than add a
+dependency, `and` and `eq` are re-exported from `@tender/db`, keeping the ORM an
+implementation detail of the package that owns persistence.
