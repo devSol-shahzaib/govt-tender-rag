@@ -1,5 +1,10 @@
 import { fileURLToPath } from 'node:url';
+import { config } from 'dotenv';
 import { defineConfig } from 'vitest/config';
+
+// Integration tests need TEST_DATABASE_URL. Loaded here so it is set before any test
+// module is imported.
+config({ path: './.env' });
 
 const fromHere = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
 

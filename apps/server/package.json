@@ -7,11 +7,13 @@
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "import:corpus": "tsx src/scripts/import-corpus.ts"
   },
   "dependencies": {
     "@tender/db": "workspace:*",
     "cors": "^2.8.6",
+    "csv-parse": "^7.0.3",
     "dotenv": "^18.0.1",
     "express": "^5.2.1",
     "helmet": "^8.3.0",
