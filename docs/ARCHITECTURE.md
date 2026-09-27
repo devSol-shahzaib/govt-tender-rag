@@ -31,7 +31,9 @@ tender-rag-project/
     server/                  Node backend: HTTP API and ingestion jobs
       src/config/            env (Zod validated), logger, cors
       src/middleware/        errorHandler, validate, requestLogger
-      src/modules/           health; documents, ingestion, retrieval, answers (planned)
+      src/modules/           health, documents; ingestion, retrieval, answers (planned)
+        documents/           manifest parsing, corpus coverage, hashing, import
+      src/scripts/           import-corpus and other one-off entry points
       src/jobs/              pg-boss handlers (planned, F004)
       src/utils/             AppError and shared helpers
   packages/
