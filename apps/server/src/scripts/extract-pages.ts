@@ -15,18 +15,29 @@ const CORPUS_ROOT = fileURLToPath(new URL('../../../../corpus/', import.meta.url
  * Provider pricing changes, and a stale constant in the repo would report a cost that
  * looks measured and is not. With nothing configured, cost is reported as unknown.
  */
-function visionPricing(modelId: string): Record<string, ModelPricing> {
-  const input = process.env.OPENAI_VISION_INPUT_PER_MTOK;
-  const output = process.env.OPENAI_VISION_OUTPUT_PER_MTOK;
+function parsePrice(name: string): number | undefined {
+  const raw = (process.env[name] ?? '').trim();
 
+  // Blank is unset, not zero. Number('') is 0, so a blank placeholder would otherwise
+  // report a cost of $0.0000, which reads as a measurement and is not one.
+  if (raw === '') return undefined;
+
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative number, got ${JSON.stringify(raw)}`);
+  }
+  return value;
+}
+
+function visionPricing(modelId: string): Record<string, ModelPricing> {
+  const input = parsePrice('OPENAI_VISION_INPUT_PER_MTOK');
+  const output = parsePrice('OPENAI_VISION_OUTPUT_PER_MTOK');
+
+  // Both or neither. One price alone would produce a cost that silently ignores half
+  // the tokens.
   if (input === undefined || output === undefined) return {};
 
-  return {
-    [modelId]: {
-      inputPerMillionUsd: Number(input),
-      outputPerMillionUsd: Number(output),
-    },
-  };
+  return { [modelId]: { inputPerMillionUsd: input, outputPerMillionUsd: output } };
 }
 
 async function main(): Promise<void> {
