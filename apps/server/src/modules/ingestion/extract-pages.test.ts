@@ -194,12 +194,17 @@ describeWithDb('extractPages', () => {
     expect(stored).toEqual([]);
   });
 
-  it('respects the OCR limit, which is the safety valve on spending', async () => {
-    const { root } = await seed([
+  it('defers a whole document that needs more OCR than the limit allows', async () => {
+    // The corrigendum needs 1 OCR page and fits; the minutes need 14 and do not. The
+    // limit used to stop partway through a document and still mark it extracted, so
+    // its remaining pages would never have been read by any later run.
+    const minutesPath = 'kphealth/kphealth_bemonc-516119_prebid_minutes-2.pdf';
+    const { root, documents: docs } = await seed([
       {
-        corpusPath: 'kphealth/kphealth_bemonc-516119_prebid_minutes-2.pdf',
+        corpusPath: 'kphealth/kphealth_antimalaria-2025-26_corrigendum-1.pdf',
         sha: `f${randomUUID()}`,
       },
+      { corpusPath: minutesPath, sha: `f2${randomUUID()}` },
     ]);
 
     const report = await extractPages(handle.db, {
@@ -208,8 +213,46 @@ describeWithDb('extractPages', () => {
       ocrLimit: 3,
     });
 
-    expect(report.usage.calls).toBe(3);
-    expect(report.pagesFromOcr).toBe(3);
+    expect(report.usage.calls).toBe(1);
+    expect(report.documentsDeferred).toEqual([minutesPath]);
+
+    const minutes = docs.find((d) => d?.filePath === minutesPath);
+    const [after] = await handle.db
+      .select()
+      .from(documents)
+      .where(eq(documents.id, minutes?.id ?? ''));
+    expect(after?.extractedSha256).toBeNull();
+    expect(
+      await handle.db
+        .select()
+        .from(pages)
+        .where(eq(pages.documentId, minutes?.id ?? '')),
+    ).toEqual([]);
+  });
+
+  it('processes only the documents named, and refuses a path it does not know', async () => {
+    const wanted = 'kphealth/kphealth_antimalaria-2025-26_corrigendum-1.pdf';
+    const { root } = await seed([
+      { corpusPath: wanted, sha: `h${randomUUID()}` },
+      { corpusPath: 'epads/pakpost_p102751_bidding_document.pdf', sha: `h2${randomUUID()}` },
+    ]);
+
+    const report = await extractPages(handle.db, {
+      corpusRoot: root,
+      gateway: mockGateway('page text'),
+      documentPaths: [wanted],
+    });
+
+    expect(report.documentsProcessed).toBe(1);
+    expect(report.pagesInserted).toBe(1);
+
+    await expect(
+      extractPages(handle.db, {
+        corpusRoot: root,
+        gateway: mockGateway('page text'),
+        documentPaths: ['kphealth/does-not-exist.pdf'],
+      }),
+    ).rejects.toThrow(/No imported document with path: kphealth\/does-not-exist\.pdf/);
   });
 
   it('writes nothing on a dry run but reports the OCR pages it would need', async () => {

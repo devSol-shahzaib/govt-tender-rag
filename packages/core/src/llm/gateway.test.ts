@@ -161,3 +161,44 @@ describe('Gateway.readPageImage', () => {
     );
   });
 });
+
+describe('Gateway reasoning effort', () => {
+  function capturingModel(seen: { providerOptions?: unknown }[]) {
+    return new MockLanguageModelV4({
+      doGenerate: (options) => {
+        seen.push({ providerOptions: options.providerOptions });
+        return Promise.resolve({
+          finishReason: { unified: 'stop' as const, raw: 'stop' },
+          usage: {
+            inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 1, text: 1, reasoning: 0 },
+          },
+          content: [{ type: 'text' as const, text: 'ok' }],
+          warnings: [],
+        });
+      },
+    });
+  }
+
+  it('sends the configured effort to the provider', async () => {
+    const seen: { providerOptions?: unknown }[] = [];
+    const gateway = new Gateway({
+      models: MODELS,
+      modelResolver: () => capturingModel(seen),
+      visionReasoningEffort: 'none',
+    });
+
+    await gateway.readPageImage(request);
+
+    expect(seen[0]?.providerOptions).toEqual({ openai: { reasoningEffort: 'none' } });
+  });
+
+  it('sends nothing when unset, since a non-reasoning model may reject the parameter', async () => {
+    const seen: { providerOptions?: unknown }[] = [];
+    const gateway = new Gateway({ models: MODELS, modelResolver: () => capturingModel(seen) });
+
+    await gateway.readPageImage(request);
+
+    expect(seen[0]?.providerOptions).toBeUndefined();
+  });
+});

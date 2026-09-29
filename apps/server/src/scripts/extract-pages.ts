@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
-import { Gateway, type ModelPricing } from '@tender/core';
+import { Gateway, type ModelPricing, REASONING_EFFORTS, type ReasoningEffort } from '@tender/core';
 import { createDatabase } from '@tender/db';
 import { loadConfig } from '../config/env.js';
 import { logger } from '../config/logger.js';
@@ -29,6 +29,18 @@ function parsePrice(name: string): number | undefined {
   return value;
 }
 
+function visionReasoningEffort(): ReasoningEffort | undefined {
+  const raw = (process.env.OPENAI_VISION_REASONING_EFFORT ?? '').trim();
+  if (raw === '') return undefined;
+
+  if (!(REASONING_EFFORTS as readonly string[]).includes(raw)) {
+    throw new Error(
+      `OPENAI_VISION_REASONING_EFFORT must be one of ${REASONING_EFFORTS.join(', ')}, got ${JSON.stringify(raw)}`,
+    );
+  }
+  return raw as ReasoningEffort;
+}
+
 function visionPricing(modelId: string): Record<string, ModelPricing> {
   const input = parsePrice('OPENAI_VISION_INPUT_PER_MTOK');
   const output = parsePrice('OPENAI_VISION_OUTPUT_PER_MTOK');
@@ -45,6 +57,8 @@ async function main(): Promise<void> {
     options: {
       limit: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
+      // Repeatable: --document kphealth/a.pdf --document kphealth/b.pdf
+      document: { type: 'string', multiple: true },
     },
   });
 
@@ -76,6 +90,7 @@ async function main(): Promise<void> {
   const gateway = new Gateway({
     models: { ...models, vision: visionModel },
     pricing: visionPricing(visionModel),
+    visionReasoningEffort: visionReasoningEffort(),
   });
 
   const handle = createDatabase(config.DATABASE_URL, { max: 1 });
@@ -86,15 +101,21 @@ async function main(): Promise<void> {
       gateway,
       ocrLimit,
       dryRun,
+      documentPaths: values.document,
       onProgress: (message) => {
         process.stdout.write(`  ${message}\n`);
       },
     });
 
+    // Three different situations, so three different messages. A dry run makes no calls,
+    // and telling the operator to set prices they have already set would send them
+    // looking for a problem that does not exist.
     const cost =
-      report.usage.costUsd === undefined
-        ? 'unknown (set OPENAI_VISION_INPUT_PER_MTOK and OPENAI_VISION_OUTPUT_PER_MTOK)'
-        : `$${report.usage.costUsd.toFixed(4)}`;
+      report.usage.calls === 0
+        ? 'none, no calls made'
+        : report.usage.costUsd === undefined
+          ? 'unknown (set OPENAI_VISION_INPUT_PER_MTOK and OPENAI_VISION_OUTPUT_PER_MTOK)'
+          : `$${report.usage.costUsd.toFixed(4)}`;
 
     process.stdout.write(
       [
@@ -102,6 +123,7 @@ async function main(): Promise<void> {
         dryRun ? '  DRY RUN, nothing written' : '  extraction complete',
         `  documents processed  ${String(report.documentsProcessed)}`,
         `  documents skipped    ${String(report.documentsSkipped)}`,
+        `  documents deferred   ${String(report.documentsDeferred.length)}`,
         `  pages inserted       ${String(report.pagesInserted)}`,
         `    from text layer    ${String(report.pagesFromTextLayer)}`,
         `    from OCR           ${String(report.pagesFromOcr)}`,
@@ -113,6 +135,10 @@ async function main(): Promise<void> {
         '',
       ].join('\n'),
     );
+
+    for (const deferred of report.documentsDeferred) {
+      process.stdout.write(`  deferred, needs more OCR than --limit allows: ${deferred}\n`);
+    }
 
     for (const failure of report.ocrFailures) {
       logger.error(

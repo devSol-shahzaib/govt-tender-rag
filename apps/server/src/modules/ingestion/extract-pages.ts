@@ -13,6 +13,8 @@ export interface OcrFailure {
 export interface ExtractionReport {
   readonly documentsProcessed: number;
   readonly documentsSkipped: number;
+  /** Needed more OCR pages than the remaining budget, so left untouched for a later run. */
+  readonly documentsDeferred: readonly string[];
   readonly pagesInserted: number;
   readonly pagesFromTextLayer: number;
   readonly pagesFromOcr: number;
@@ -30,8 +32,16 @@ export interface ExtractionReport {
 export interface ExtractOptions {
   readonly corpusRoot: string;
   readonly gateway: Gateway;
-  /** Caps how many pages are sent to OCR. The safety valve on spending. */
+  /**
+   * Caps how many pages are sent to OCR. The safety valve on spending.
+   *
+   * Applied per document, not per page: a document that needs more OCR pages than
+   * remain is deferred whole. Stopping partway through one would leave it half
+   * extracted, and marking it done would mean no later run ever finishes it.
+   */
   readonly ocrLimit?: number;
+  /** Restricts the run to these corpus paths. Used to sample specific documents. */
+  readonly documentPaths?: readonly string[];
   /** Reports what would happen and writes nothing. */
   readonly dryRun?: boolean;
   readonly onProgress?: (message: string) => void;
@@ -55,6 +65,7 @@ export async function extractPages(
   const report = {
     documentsProcessed: 0,
     documentsSkipped: 0,
+    documentsDeferred: [] as string[],
     pagesInserted: 0,
     pagesFromTextLayer: 0,
     pagesFromOcr: 0,
@@ -67,7 +78,19 @@ export async function extractPages(
   };
 
   let ocrBudget = options.ocrLimit ?? Number.POSITIVE_INFINITY;
-  const allDocuments = await db.select().from(documents);
+  let allDocuments = await db.select().from(documents);
+
+  if (options.documentPaths !== undefined) {
+    const wanted = new Set(options.documentPaths);
+    const known = new Set(allDocuments.map((d) => d.filePath));
+    const unknown = [...wanted].filter((p) => !known.has(p));
+
+    // Fail rather than quietly processing fewer documents than were asked for.
+    if (unknown.length > 0) {
+      throw new Error(`No imported document with path: ${unknown.join(', ')}`);
+    }
+    allDocuments = allDocuments.filter((d) => wanted.has(d.filePath));
+  }
 
   for (const document of allDocuments) {
     if (document.extractedSha256 === document.contentSha256) {
@@ -77,6 +100,14 @@ export async function extractPages(
 
     const bytes = new Uint8Array(await readFile(path.join(options.corpusRoot, document.filePath)));
     const extracted = await extractPageText(bytes);
+    const ocrNeeded = extracted.filter((page) => page.needsOcr).length;
+
+    if (ocrNeeded > ocrBudget) {
+      report.documentsDeferred.push(document.filePath);
+      continue;
+    }
+    ocrBudget -= ocrNeeded;
+
     const rows: { pageNumber: number; text: string; method: 'text_layer' | 'ocr' }[] = [];
 
     for (const page of extracted) {
@@ -84,9 +115,6 @@ export async function extractPages(
         rows.push({ pageNumber: page.pageNumber, text: page.text, method: 'text_layer' });
         continue;
       }
-
-      if (ocrBudget <= 0) break;
-      ocrBudget -= 1;
 
       if (options.dryRun) {
         report.pagesFromOcr += 1;
@@ -160,6 +188,7 @@ export async function extractPages(
   return {
     documentsProcessed: report.documentsProcessed,
     documentsSkipped: report.documentsSkipped,
+    documentsDeferred: report.documentsDeferred,
     pagesInserted: report.pagesInserted,
     pagesFromTextLayer: report.pagesFromTextLayer,
     pagesFromOcr: report.pagesFromOcr,

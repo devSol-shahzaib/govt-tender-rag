@@ -11,8 +11,26 @@ import { GatewayError, type GatewayResult, type ModelPricing, type Usage } from 
  * capture, and the seam that lets a mock model stand in. Tracing and routing attach
  * here too when Modules 1 and 7 arrive, which is the point of a single choke point.
  */
+export const REASONING_EFFORTS = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
 export interface GatewayOptions {
   readonly models?: ModelConfig;
+  /**
+   * Reasoning effort for page reading. Transcription gains nothing from reasoning,
+   * and reasoning tokens are billed as output, so for a reasoning model this should be
+   * `none`. Left unset it is not sent at all, because a non-reasoning model may reject
+   * the parameter. It is configuration, like the model ID, not a gateway constant.
+   */
+  readonly visionReasoningEffort?: ReasoningEffort;
   readonly apiKey?: string;
   /** Supplied by tests and by D009's load testing. No network call happens. */
   readonly modelResolver?: (modelId: string) => LanguageModel;
@@ -61,8 +79,10 @@ export class Gateway {
   private readonly pricing: Readonly<Record<string, ModelPricing>>;
   private readonly retry: RetryOptions;
   private readonly onCall: ((event: CallEvent) => void) | undefined;
+  private readonly visionReasoningEffort: ReasoningEffort | undefined;
 
   constructor(options: GatewayOptions = {}) {
+    this.visionReasoningEffort = options.visionReasoningEffort;
     this.models = options.models ?? loadModelConfig();
     this.pricing = options.pricing ?? {};
     this.retry = options.retry ?? {};
@@ -81,6 +101,9 @@ export class Gateway {
     return this.call('readPageImage', this.models.vision, async (model) => {
       const result = await generateText({
         model,
+        ...(this.visionReasoningEffort === undefined
+          ? {}
+          : { providerOptions: { openai: { reasoningEffort: this.visionReasoningEffort } } }),
         messages: [
           {
             role: 'user',
