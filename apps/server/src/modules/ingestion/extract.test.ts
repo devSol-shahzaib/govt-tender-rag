@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   countExtractableChars,
   extractPageText,
@@ -90,5 +90,31 @@ describe('renderPageToPng', () => {
     // PNG magic number, so this is a real image rather than an empty buffer.
     expect([...png.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
     expect(png.byteLength).toBeGreaterThan(10_000);
+  });
+});
+
+describe('standard font loading', () => {
+  it('renders without pdf.js failing to load its standard fonts', async () => {
+    // Guards a fix that was once "verified" with a dry run, which never renders and so
+    // could not have shown the warning either way. This renders a page that needs a
+    // standard font, and fails if pdf.js reports it could not load one.
+    const logged: string[] = [];
+    const capture = (...args: unknown[]) => {
+      logged.push(args.map(String).join(' '));
+    };
+    const log = vi.spyOn(console, 'log').mockImplementation(capture);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(capture);
+
+    try {
+      await renderPageToPng(
+        await read('kphealth/kphealth_antimalaria-2025-26_corrigendum-1.pdf'),
+        1,
+      );
+    } finally {
+      log.mockRestore();
+      warn.mockRestore();
+    }
+
+    expect(logged.filter((line) => line.includes('Unable to load font data'))).toEqual([]);
   });
 });

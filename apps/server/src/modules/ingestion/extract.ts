@@ -1,20 +1,23 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 /**
  * pdf.js needs the 14 standard PDF fonts to render pages whose fonts are not embedded.
- * Without this it warns and substitutes, which would put wrong glyphs into the images
- * sent for OCR. Resolved from the installed package rather than hard-coded, so it
- * cannot drift from the version actually in use.
+ * Without them it warns and substitutes, which would put wrong glyphs into the images
+ * sent for OCR. Resolved from the installed package so it cannot drift from the version
+ * actually in use.
+ *
+ * A plain filesystem path, not a file:// URL, despite the option's name. On Node, pdf.js
+ * concatenates this string with a font file name and hands the result to
+ * fs.readFile, which reads a "file://..." string as a relative path that does not
+ * exist. The trailing separator matters for the same reason.
  */
-const STANDARD_FONT_DATA_URL = pathToFileURL(
+const STANDARD_FONT_DATA_URL =
   path.join(
     path.dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json')),
-    'standard_fonts/',
-  ),
-).href;
+    'standard_fonts',
+  ) + path.sep;
 
 function openDocument(pdfBytes: Uint8Array) {
   // The buffer is copied because pdf.js takes ownership of it and detaches it, leaving
