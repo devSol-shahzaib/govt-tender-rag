@@ -19,6 +19,10 @@ export default defineConfig({
     },
   },
   test: {
+    // Integration tests parse real PDFs and write to a real database. The slowest take
+    // about 2s under normal load, and one failed under the default 5s limit when run
+    // straight after a full build. Matches the limit packages/db already uses.
+    testTimeout: 15_000,
     // The logger reads LOG_LEVEL when the module is first imported, so it has to be
     // set before any test imports the app. Silencing it keeps test output readable.
     env: { LOG_LEVEL: 'silent' },
