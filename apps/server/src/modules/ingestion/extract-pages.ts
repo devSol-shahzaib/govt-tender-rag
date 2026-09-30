@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { type Gateway, PAGE_OCR_PROMPT } from '@tender/core';
 import { and, type Database, documents, eq, pages } from '@tender/db';
-import { extractPageText, renderPageToPng } from './extract.js';
+import { EXTRACTOR_VERSION, extractPageText, renderPageToPng } from './extract.js';
 
 export interface OcrFailure {
   readonly filePath: string;
@@ -17,7 +17,14 @@ export interface ExtractionReport {
   readonly documentsDeferred: readonly string[];
   readonly pagesInserted: number;
   readonly pagesFromTextLayer: number;
+  /** Pages whose text came from OCR, whether newly read or reused. */
   readonly pagesFromOcr: number;
+  /**
+   * OCR text carried over from a previous extraction of the same bytes, with no model
+   * call. This is what makes changing the extractor free: the OCR output does not
+   * depend on how the text layer is joined.
+   */
+  readonly pagesOcrReused: number;
   readonly ocrFailures: readonly OcrFailure[];
   readonly usage: {
     readonly calls: number;
@@ -69,6 +76,7 @@ export async function extractPages(
     pagesInserted: 0,
     pagesFromTextLayer: 0,
     pagesFromOcr: 0,
+    pagesOcrReused: 0,
     ocrFailures: [] as OcrFailure[],
     calls: 0,
     inputTokens: 0,
@@ -93,14 +101,34 @@ export async function extractPages(
   }
 
   for (const document of allDocuments) {
-    if (document.extractedSha256 === document.contentSha256) {
+    const sameBytes = document.extractedSha256 === document.contentSha256;
+
+    // Skipped only when both the bytes and the extraction logic are unchanged. Checking
+    // bytes alone meant documents extracted by older logic would never be redone.
+    if (sameBytes && document.extractorVersion === EXTRACTOR_VERSION) {
       report.documentsSkipped += 1;
       continue;
     }
 
+    // OCR text from a previous run is still valid when the bytes have not changed, since
+    // it was read from the same page images. Reused rather than paid for again.
+    const reusableOcr = new Map<number, string>();
+    if (sameBytes) {
+      const previous = await db
+        .select()
+        .from(pages)
+        .where(and(eq(pages.documentId, document.id), eq(pages.extractionMethod, 'ocr')));
+      for (const row of previous) {
+        if (row.text !== null) reusableOcr.set(row.pageNumber, row.text);
+      }
+    }
+
     const bytes = new Uint8Array(await readFile(path.join(options.corpusRoot, document.filePath)));
     const extracted = await extractPageText(bytes);
-    const ocrNeeded = extracted.filter((page) => page.needsOcr).length;
+    // The budget limits model calls, so pages that can reuse earlier OCR do not count.
+    const ocrNeeded = extracted.filter(
+      (page) => page.needsOcr && !reusableOcr.has(page.pageNumber),
+    ).length;
 
     if (ocrNeeded > ocrBudget) {
       report.documentsDeferred.push(document.filePath);
@@ -113,6 +141,16 @@ export async function extractPages(
     for (const page of extracted) {
       if (!page.needsOcr) {
         rows.push({ pageNumber: page.pageNumber, text: page.text, method: 'text_layer' });
+        continue;
+      }
+
+      const reused = reusableOcr.get(page.pageNumber);
+      if (reused !== undefined) {
+        rows.push({ pageNumber: page.pageNumber, text: reused, method: 'ocr' });
+        report.pagesOcrReused += 1;
+        // A real run counts OCR pages from the stored rows below; a dry run never gets
+        // there, so it counts here. pagesFromOcr means new plus reused in both.
+        if (options.dryRun) report.pagesFromOcr += 1;
         continue;
       }
 
@@ -174,7 +212,7 @@ export async function extractPages(
       if (!failedHere) {
         await tx
           .update(documents)
-          .set({ extractedSha256: document.contentSha256 })
+          .set({ extractedSha256: document.contentSha256, extractorVersion: EXTRACTOR_VERSION })
           .where(and(eq(documents.id, document.id), eq(documents.tenantId, document.tenantId)));
       }
     });
@@ -192,6 +230,7 @@ export async function extractPages(
     pagesInserted: report.pagesInserted,
     pagesFromTextLayer: report.pagesFromTextLayer,
     pagesFromOcr: report.pagesFromOcr,
+    pagesOcrReused: report.pagesOcrReused,
     ocrFailures: report.ocrFailures,
     usage: {
       calls: report.calls,

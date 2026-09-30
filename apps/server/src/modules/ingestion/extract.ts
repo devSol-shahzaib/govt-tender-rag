@@ -76,6 +76,44 @@ export function countExtractableChars(text: string): number {
 }
 
 /**
+ * Identifies the extraction logic that produced a document's pages. Bump it whenever
+ * extraction changes, and every document is re-extracted on the next run. Without it,
+ * documents extracted by older logic would be skipped forever, because their bytes did
+ * not change.
+ *
+ * lines-v2: keeps pdf.js line ends. v1 flattened each page onto a single line, which
+ * lost the headings, clause markers and field lines that chunking needs.
+ */
+export const EXTRACTOR_VERSION = 'lines-v2';
+
+export interface TextItemLike {
+  readonly str?: string;
+  readonly hasEOL?: boolean;
+}
+
+/**
+ * Joins pdf.js text items into page text, keeping line breaks.
+ *
+ * Items on the same line are joined with a space, exactly as v1 joined every item.
+ * Joining with nothing glues words that pdf.js stores as separate items, turning
+ * "through EPADS" into "throughEPADS". Only a line end becomes a newline, so the text
+ * ignoring whitespace is identical to v1's, and so are the OCR decisions, which are
+ * counted ignoring whitespace.
+ */
+export function joinTextItems(items: readonly TextItemLike[]): string {
+  const raw = items
+    .map((item) => (item.str === undefined ? '' : item.str + (item.hasEOL === true ? '\n' : ' ')))
+    .join('');
+
+  return raw
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[^\S\n]+/g, ' ').trim())
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
+/**
  * Reads every page's text layer.
  *
  * Page numbers are physical and 1-based, matching pdf.js. EPADS documents print a
@@ -91,11 +129,7 @@ export async function extractPageText(pdfBytes: Uint8Array): Promise<ExtractedPa
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const content = await page.getTextContent();
-      const text = content.items
-        .map((item) => ('str' in item ? item.str : ''))
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      const text = joinTextItems(content.items as readonly TextItemLike[]);
       const charCount = countExtractableChars(text);
 
       pages.push({

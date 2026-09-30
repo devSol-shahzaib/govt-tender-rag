@@ -15,6 +15,13 @@
       "when": 1790498992534,
       "tag": "0001_track_extracted_hash",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790758812954,
+      "tag": "0002_track_extractor_version",
+      "breakpoints": true
     }
   ]
 }

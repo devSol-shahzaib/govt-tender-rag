@@ -69,6 +69,10 @@ export const documents = pgTable(
     // different from contentSha256 means the file changed and the pages are stale.
     // Without it, extraction cannot tell "already done" from "done against old bytes".
     extractedSha256: text('extracted_sha256'),
+    // Which extraction logic produced the pages. Re-extraction happens when this differs
+    // from the current version, so a change to extraction reaches documents whose bytes
+    // did not change.
+    extractorVersion: text('extractor_version'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

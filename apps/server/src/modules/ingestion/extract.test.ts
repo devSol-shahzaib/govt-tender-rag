@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   countExtractableChars,
   extractPageText,
+  joinTextItems,
   OCR_CHAR_THRESHOLD,
   renderPageToPng,
 } from './extract.js';
@@ -116,5 +117,47 @@ describe('standard font loading', () => {
     }
 
     expect(logged.filter((line) => line.includes('Unable to load font data'))).toEqual([]);
+  });
+});
+
+describe('joinTextItems', () => {
+  it('keeps line ends as newlines', () => {
+    expect(
+      joinTextItems([
+        { str: 'Proposal Data Sheet (BDS)', hasEOL: true },
+        { str: 'A. General', hasEOL: true },
+      ]),
+    ).toBe('Proposal Data Sheet (BDS)\nA. General');
+  });
+
+  it('separates items on the same line with a space, so words are never glued', () => {
+    // Joining with nothing once produced "throughEPADS" from "through" and "EPADS".
+    expect(joinTextItems([{ str: 'clarifications through' }, { str: 'EPADS v2.0' }])).toBe(
+      'clarifications through EPADS v2.0',
+    );
+  });
+
+  it('collapses runs of spaces and drops blank lines', () => {
+    expect(
+      joinTextItems([
+        { str: 'Name  of   Agency:', hasEOL: true },
+        { str: '   ', hasEOL: true },
+        { str: 'Pakistan Post' },
+      ]),
+    ).toBe('Name of Agency:\nPakistan Post');
+  });
+
+  it('ignores items that carry no text, such as marked content', () => {
+    expect(joinTextItems([{ str: 'Bid' }, {}, { str: 'Security' }])).toBe('Bid Security');
+  });
+});
+
+describe('extracted text keeps document structure', () => {
+  it('puts the Bid Data Sheet heading on its own line', async () => {
+    const pages = await extractPageText(await read('epads/pakpost_p102751_bidding_document.pdf'));
+    const lines = pages.find((p) => p.pageNumber === 17)?.text.split('\n') ?? [];
+
+    expect(lines).toContain('Proposal Data Sheet (BDS)');
+    expect(lines.length).toBeGreaterThan(10);
   });
 });

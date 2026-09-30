@@ -126,7 +126,7 @@ async function main(): Promise<void> {
         `  documents deferred   ${String(report.documentsDeferred.length)}`,
         `  pages inserted       ${String(report.pagesInserted)}`,
         `    from text layer    ${String(report.pagesFromTextLayer)}`,
-        `    from OCR           ${String(report.pagesFromOcr)}`,
+        `    from OCR           ${String(report.pagesFromOcr)} (reused ${String(report.pagesOcrReused)}, no call)`,
         `  OCR calls            ${String(report.usage.calls)}`,
         `  tokens in/out        ${String(report.usage.inputTokens)}/${String(report.usage.outputTokens)}`,
         `  cost                 ${cost}`,

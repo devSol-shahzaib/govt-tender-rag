@@ -159,6 +159,61 @@ describeWithDb('extractPages', () => {
     expect(rerun.pagesInserted).toBe(83);
   });
 
+  it('re-extracts when the extractor changed, although the bytes did not', async () => {
+    const { root, documents: docs } = await seed([
+      { corpusPath: 'epads/pakpost_p102751_bidding_document.pdf', sha: `v${randomUUID()}` },
+    ]);
+    await extractPages(handle.db, { corpusRoot: root, gateway: mockGateway('unused') });
+
+    // Pretend these pages came from older extraction logic.
+    await handle.db
+      .update(documents)
+      .set({ extractorVersion: 'lines-v1' })
+      .where(eq(documents.id, docs[0]?.id ?? ''));
+
+    const rerun = await extractPages(handle.db, {
+      corpusRoot: root,
+      gateway: mockGateway('unused'),
+    });
+
+    expect(rerun.documentsSkipped).toBe(0);
+    expect(rerun.pagesInserted).toBe(83);
+  });
+
+  it('reuses OCR text instead of paying again when only the extractor changed', async () => {
+    const {
+      root,
+      tenantId,
+      documents: docs,
+    } = await seed([
+      {
+        corpusPath: 'kphealth/kphealth_antimalaria-2025-26_corrigendum-1.pdf',
+        sha: `r${randomUUID()}`,
+      },
+    ]);
+    await extractPages(handle.db, {
+      corpusRoot: root,
+      gateway: mockGateway('CORRIGENDUM. Bids now open 4th March, 2026.'),
+    });
+    await handle.db
+      .update(documents)
+      .set({ extractorVersion: 'lines-v1' })
+      .where(eq(documents.id, docs[0]?.id ?? ''));
+
+    // Any call to this gateway fails, so a passing run proves no call was made.
+    const rerun = await extractPages(handle.db, {
+      corpusRoot: root,
+      gateway: mockGateway('must not be called', { fail: true }),
+    });
+
+    expect(rerun.usage.calls).toBe(0);
+    expect(rerun.ocrFailures).toEqual([]);
+    expect(rerun.pagesOcrReused).toBe(1);
+
+    const stored = await handle.db.select().from(pages).where(eq(pages.tenantId, tenantId));
+    expect(stored[0]?.text).toBe('CORRIGENDUM. Bids now open 4th March, 2026.');
+  });
+
   it('records an OCR failure, continues, and leaves the document unmarked', async () => {
     const {
       root,
