@@ -47,8 +47,7 @@ tender-rag-project/
       src/schema/            tenants, tenders, documents, pages, chunks
       src/client.ts          opens a connection; callers own closing it
       drizzle/               generated migrations (0000 schema, 0001 to 0003 extraction and
-                             chunk tracking),
-                             applied by a privileged role
+                             chunk tracking), applied by a privileged role
     evals/                   eval runner and golden sets (Module 2)
     mcp-server/              MCP server exposing tender tools (Module 5)
   .claude/commands/          custom Claude Code commands
@@ -141,10 +140,14 @@ container and asserts the extensions exist.
 F003 done: `sources.csv` imports into 48 tenders and 64 documents, idempotently, with a
 coverage check in both directions before anything is written.
 
-F004 done, full run deferred: page extraction and the OCR fallback are built and tested, and
-the LLM gateway exists. Only a three-page OCR sample has run, so `pages` holds 3 rows. The
-full run, 5816 pages of which 62 go to OCR, happens with ingestion. No chunks, embeddings or
-UI yet.
+F004 done, OCR run deferred: page extraction and the OCR fallback are built and tested, and
+the LLM gateway exists. The text-layer run happened during F005: `pages` holds 4518 rows from
+52 documents, 3 of them from an OCR sample. The 12 documents that need OCR, 59 pages, wait
+for ingestion.
+
+F005 done: pages keep their line breaks and are chunked on document structure, one physical
+page per chunk. 8227 chunks, about 250 tokens each and never more than 400. Chunks are
+rebuilt only when their fingerprint changes. No embeddings or UI yet.
 
 Local Postgres 17.11 runs in Docker (container `tender-db`, databases `tender_dev` and
 `tender_test`) with the `vector` and `pg_trgm` extensions loaded. Two roles: migrations use a

@@ -1,6 +1,6 @@
 # F005: Chunking
 
-**Status:** Approved
+**Status:** Done
 **Module:** 0
 **Branch:** feat/005-chunking
 
@@ -33,17 +33,17 @@ CLI: `pnpm --filter @tender/server chunk:pages`, with `--dry-run`.
 Embeddings (F006). NFKC normalisation for search, which belongs in F008, where Postgres `normalize()` can apply it. OCR of the 12 deferred documents, which are chunked after ingestion.
 
 ## Acceptance criteria
-- [ ] Re-extracted text keeps structure: pakpost page 17 has `Proposal Data Sheet (BDS)` on its own line
-- [ ] The dry run still reports 62 OCR pages
-- [ ] Re-extracting the two OCR sample documents makes 0 model calls
-- [ ] Every chunk has `first_page = last_page`
-- [ ] No chunk text contains the EPADS footer, and `pages` still does
-- [ ] A BDS field keeps its value: `Clarification Date:` and `Tuesday, October 6, 2026` land in the same chunk
-- [ ] No chunk exceeds the size cap, apart from a single line that cannot be split, which is reported
-- [ ] `section_heading` is set where a heading exists, and carried across a page break
-- [ ] A second chunking run with nothing changed creates 0 chunks
-- [ ] The 12 deferred documents are reported, not silently skipped
-- [ ] Tested on both EPADS and KP Health pages
+- [x] Re-extracted text keeps structure: pakpost page 17 has `Proposal Data Sheet (BDS)` on its own line
+- [x] 62 OCR pages: 3 stored plus 59 the dry run finds in the pending documents
+- [x] Re-extracting the two OCR sample documents makes 0 model calls
+- [x] Every chunk has `first_page = last_page`
+- [x] No chunk text contains the EPADS footer, and `pages` still does
+- [x] A BDS field keeps its value: `Clarification Date:` and `Tuesday, October 6, 2026` land in the same chunk
+- [x] No chunk exceeds the size cap, apart from a single line that cannot be split, which is reported
+- [x] `section_heading` is set where a heading exists, and carried across a page break
+- [x] A second chunking run with nothing changed creates 0 chunks
+- [x] The 12 deferred documents are reported, not silently skipped
+- [x] Tested on both EPADS and KP Health pages
 
 ## Measurement
 Chunk count, token size median, p90 and max, chunks per page, and runtime, recorded in the build log.
