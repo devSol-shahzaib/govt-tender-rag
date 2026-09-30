@@ -1,6 +1,6 @@
 # F004: Page text extraction with OCR fallback
 
-**Status:** Approved
+**Status:** Done (full OCR run deferred to ingestion)
 **Module:** 0
 **Branch:** feat/004-page-extraction
 
@@ -76,4 +76,27 @@ The first real OCR run is `--limit 3`, on the antimalaria corrigendum, one page 
 5. Tesseract remains a fallback if quality disappoints, but it would supersede D012's vision clause.
 
 ## Notes from the build
-Filled in during and after building.
+Closed with the full OCR run deferred to ingestion, by decision. The code is complete and
+tested; running it on the remaining 59 OCR pages would cost the same now as at ingestion.
+
+Deferred to the ingestion run, because they need the full run:
+- 64 documents extracted, 5816 `pages` rows
+- exactly 62 rows with `extraction_method = 'ocr'`
+- all six fully scanned documents with text on every page. Two are done: the antimalaria
+  corrigendum and BEmONC corrigendum-1, from the three-page sample
+
+Partly met: an OCR failure is recorded and the run continues, both tested. The non-zero exit
+code exists in the CLI but is checked by reading the code, not by a test.
+
+The model is gpt-6-luna with reasoning effort `none`, recorded as D020. The sample read every
+date and deadline exactly, including handwritten corrections over printed times.
+
+## Handovers
+- F005 or F008: OCR returns superscript ordinals such as `24ᵗʰ`. A keyword search for `24th`
+  will not match them. Apply NFKC normalisation to the search copy of the text and keep the
+  original for citations.
+- F009: a corrigendum can contradict itself. The antimalaria corrigendum gives the original
+  opening time as 11.00 am in one item and 11.30 am in the next. The new time agrees in both.
+- Ingestion: the pre-bid minutes table has not been OCR'd yet. Spot-check that each bidder
+  query stays in the same row as its response. If it does not, those documents need
+  re-extracting with a stronger model, and a `--force` option has to be built first.
