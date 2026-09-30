@@ -9,7 +9,7 @@ Fill the `pages` table for all 64 documents with per-page text, using the PDF te
 
 ## What the corpus says
 
-6234 pages across 64 documents. 62 pages have fewer than 20 extractable characters. Six documents have none on any page, and every one of them is an amendment:
+5816 pages across the 64 imported documents. The corpus has 6234 pages across 66 files, but F003 drops two byte-identical copies of a 209-page document. 62 pages have fewer than 20 extractable characters, and neither dropped copy contains any of them. Six documents have none on any page, and every one of them is an amendment:
 
 ```
  1/1    antimalaria-2025-26_corrigendum-1      4/4    furniture-hcip_prebid_minutes
@@ -52,7 +52,7 @@ Extraction, `apps/server/src/modules/ingestion/`:
 Chunking (F005), embeddings (F006), the tsvector column (F008), any UI.
 
 ## Acceptance criteria
-- [ ] 64 documents extracted, 6234 `pages` rows
+- [ ] 64 documents extracted, 5816 `pages` rows. Not 6234, which counts the two duplicate files F003 deliberately drops
 - [ ] Exactly 62 rows with `extraction_method = 'ocr'`
 - [ ] All six fully-scanned documents have non-empty text on every page
 - [ ] Physical page numbering holds: `pakpost_p102751` physical page 30 is stored as 30, although it prints "Page 27 of 80"
