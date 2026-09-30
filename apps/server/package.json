@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "import:corpus": "tsx src/scripts/import-corpus.ts",
-    "extract:pages": "tsx src/scripts/extract-pages.ts"
+    "extract:pages": "tsx src/scripts/extract-pages.ts",
+    "chunk:pages": "tsx src/scripts/chunk-pages.ts"
   },
   "dependencies": {
     "@tender/core": "workspace:*",

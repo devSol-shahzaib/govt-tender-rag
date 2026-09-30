@@ -87,6 +87,7 @@ describeWithDb('extractPages', () => {
 
     const report = await extractPages(handle.db, {
       corpusRoot: root,
+      tenantId,
       gateway: mockGateway('unused'),
     });
 
@@ -110,6 +111,7 @@ describeWithDb('extractPages', () => {
 
     const report = await extractPages(handle.db, {
       corpusRoot: root,
+      tenantId,
       gateway: mockGateway('CORRIGENDUM. Bids now open 4th March, 2026 at 11.00 am.'),
     });
 
@@ -123,13 +125,14 @@ describeWithDb('extractPages', () => {
   });
 
   it('skips a document whose pages came from the bytes it still has', async () => {
-    const { root } = await seed([
+    const { root, tenantId } = await seed([
       { corpusPath: 'epads/pakpost_p102751_bidding_document.pdf', sha: `c${randomUUID()}` },
     ]);
 
-    await extractPages(handle.db, { corpusRoot: root, gateway: mockGateway('unused') });
+    await extractPages(handle.db, { corpusRoot: root, tenantId, gateway: mockGateway('unused') });
     const second = await extractPages(handle.db, {
       corpusRoot: root,
+      tenantId,
       gateway: mockGateway('unused'),
     });
 
@@ -139,10 +142,14 @@ describeWithDb('extractPages', () => {
   });
 
   it('re-extracts when the file changed underneath the stored pages', async () => {
-    const { root, documents: docs } = await seed([
+    const {
+      root,
+      tenantId,
+      documents: docs,
+    } = await seed([
       { corpusPath: 'epads/pakpost_p102751_bidding_document.pdf', sha: `d${randomUUID()}` },
     ]);
-    await extractPages(handle.db, { corpusRoot: root, gateway: mockGateway('unused') });
+    await extractPages(handle.db, { corpusRoot: root, tenantId, gateway: mockGateway('unused') });
 
     // A new content hash is what F003 writes when the bytes change.
     await handle.db
@@ -152,6 +159,7 @@ describeWithDb('extractPages', () => {
 
     const rerun = await extractPages(handle.db, {
       corpusRoot: root,
+      tenantId,
       gateway: mockGateway('unused'),
     });
 
@@ -160,10 +168,14 @@ describeWithDb('extractPages', () => {
   });
 
   it('re-extracts when the extractor changed, although the bytes did not', async () => {
-    const { root, documents: docs } = await seed([
+    const {
+      root,
+      tenantId,
+      documents: docs,
+    } = await seed([
       { corpusPath: 'epads/pakpost_p102751_bidding_document.pdf', sha: `v${randomUUID()}` },
     ]);
-    await extractPages(handle.db, { corpusRoot: root, gateway: mockGateway('unused') });
+    await extractPages(handle.db, { corpusRoot: root, tenantId, gateway: mockGateway('unused') });
 
     // Pretend these pages came from older extraction logic.
     await handle.db
@@ -173,6 +185,7 @@ describeWithDb('extractPages', () => {
 
     const rerun = await extractPages(handle.db, {
       corpusRoot: root,
+      tenantId,
       gateway: mockGateway('unused'),
     });
 
@@ -193,6 +206,7 @@ describeWithDb('extractPages', () => {
     ]);
     await extractPages(handle.db, {
       corpusRoot: root,
+      tenantId,
       gateway: mockGateway('CORRIGENDUM. Bids now open 4th March, 2026.'),
     });
     await handle.db
@@ -203,6 +217,7 @@ describeWithDb('extractPages', () => {
     // Any call to this gateway fails, so a passing run proves no call was made.
     const rerun = await extractPages(handle.db, {
       corpusRoot: root,
+      tenantId,
       gateway: mockGateway('must not be called', { fail: true }),
     });
 
@@ -228,6 +243,7 @@ describeWithDb('extractPages', () => {
 
     const report = await extractPages(handle.db, {
       corpusRoot: root,
+      tenantId,
       gateway: mockGateway('never returned', { fail: true }),
     });
 
@@ -254,7 +270,11 @@ describeWithDb('extractPages', () => {
     // limit used to stop partway through a document and still mark it extracted, so
     // its remaining pages would never have been read by any later run.
     const minutesPath = 'kphealth/kphealth_bemonc-516119_prebid_minutes-2.pdf';
-    const { root, documents: docs } = await seed([
+    const {
+      root,
+      tenantId,
+      documents: docs,
+    } = await seed([
       {
         corpusPath: 'kphealth/kphealth_antimalaria-2025-26_corrigendum-1.pdf',
         sha: `f${randomUUID()}`,
@@ -264,6 +284,7 @@ describeWithDb('extractPages', () => {
 
     const report = await extractPages(handle.db, {
       corpusRoot: root,
+      tenantId,
       gateway: mockGateway('page text'),
       ocrLimit: 3,
     });
@@ -287,13 +308,14 @@ describeWithDb('extractPages', () => {
 
   it('processes only the documents named, and refuses a path it does not know', async () => {
     const wanted = 'kphealth/kphealth_antimalaria-2025-26_corrigendum-1.pdf';
-    const { root } = await seed([
+    const { root, tenantId } = await seed([
       { corpusPath: wanted, sha: `h${randomUUID()}` },
       { corpusPath: 'epads/pakpost_p102751_bidding_document.pdf', sha: `h2${randomUUID()}` },
     ]);
 
     const report = await extractPages(handle.db, {
       corpusRoot: root,
+      tenantId,
       gateway: mockGateway('page text'),
       documentPaths: [wanted],
     });
@@ -304,6 +326,7 @@ describeWithDb('extractPages', () => {
     await expect(
       extractPages(handle.db, {
         corpusRoot: root,
+        tenantId,
         gateway: mockGateway('page text'),
         documentPaths: ['kphealth/does-not-exist.pdf'],
       }),
@@ -320,6 +343,7 @@ describeWithDb('extractPages', () => {
 
     const report = await extractPages(handle.db, {
       corpusRoot: root,
+      tenantId,
       gateway: mockGateway('unused'),
       dryRun: true,
     });

@@ -22,6 +22,13 @@
       "when": 1790758812954,
       "tag": "0002_track_extractor_version",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790764977608,
+      "tag": "0003_track_chunk_fingerprint",
+      "breakpoints": true
     }
   ]
 }

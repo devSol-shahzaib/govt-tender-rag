@@ -49,6 +49,12 @@ export interface ExtractOptions {
   readonly ocrLimit?: number;
   /** Restricts the run to these corpus paths. Used to sample specific documents. */
   readonly documentPaths?: readonly string[];
+  /**
+   * Restricts the run to one tenant's documents. Tests rely on it: they run in parallel
+   * against one database, and without it one test's run picks up documents another test
+   * is still creating.
+   */
+  readonly tenantId?: string;
   /** Reports what would happen and writes nothing. */
   readonly dryRun?: boolean;
   readonly onProgress?: (message: string) => void;
@@ -86,7 +92,9 @@ export async function extractPages(
   };
 
   let ocrBudget = options.ocrLimit ?? Number.POSITIVE_INFINITY;
-  let allDocuments = await db.select().from(documents);
+  let allDocuments = await (options.tenantId === undefined
+    ? db.select().from(documents)
+    : db.select().from(documents).where(eq(documents.tenantId, options.tenantId)));
 
   if (options.documentPaths !== undefined) {
     const wanted = new Set(options.documentPaths);

@@ -73,6 +73,11 @@ export const documents = pgTable(
     // from the current version, so a change to extraction reaches documents whose bytes
     // did not change.
     extractorVersion: text('extractor_version'),
+    // What the current chunks were built from: extracted bytes, extractor version and
+    // chunker version. Chunks are rebuilt only when this changes. From F006 on,
+    // rebuilding chunks means paying to embed them again, so rebuilding on every run
+    // would cost money for nothing.
+    chunkFingerprint: text('chunk_fingerprint'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -133,6 +138,8 @@ export const chunks = pgTable(
     lastPage: integer('last_page').notNull(),
     sectionHeading: text('section_heading'),
     text: text('text').notNull(),
+    // Approximate until F006: characters divided by 4. The exact count depends on the
+    // embedding model's tokenizer, which F006 chooses.
     tokenCount: integer('token_count'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

@@ -33,8 +33,8 @@ tender-rag-project/
       src/middleware/        errorHandler, validate, requestLogger
       src/modules/           health, documents, ingestion; retrieval, answers (planned)
         documents/           manifest parsing, corpus coverage, hashing, import
-        ingestion/           page text extraction, OCR fallback for unreadable pages
-      src/scripts/           import-corpus, extract-pages and other entry points
+        ingestion/           page text extraction, OCR fallback, chunking
+      src/scripts/           import-corpus, extract-pages, chunk-pages
       src/jobs/              pg-boss handlers (planned; ingestion runs as CLI scripts for now)
       src/utils/             AppError and shared helpers
   packages/
@@ -46,7 +46,8 @@ tender-rag-project/
     db/                      connection string rules, Drizzle schema, migrations
       src/schema/            tenants, tenders, documents, pages, chunks
       src/client.ts          opens a connection; callers own closing it
-      drizzle/               generated migrations (0000 schema, 0001 extraction tracking),
+      drizzle/               generated migrations (0000 schema, 0001 to 0003 extraction and
+                             chunk tracking),
                              applied by a privileged role
     evals/                   eval runner and golden sets (Module 2)
     mcp-server/              MCP server exposing tender tools (Module 5)
@@ -101,8 +102,12 @@ PDF ──► per-page text (pdf.js)
     ──► only pages with under 20 extractable characters go to OCR, through the gateway
         (vision model, D005). 62 of 5816 pages. Every other page keeps its text layer
     ──► pages table (document_id, physical page number, text, extraction method)
-    ──► documents.extracted_sha256 records which bytes the pages came from
-    ──► chunks table (text, page range, section heading, token count)
+    ──► documents.extracted_sha256 and extractor_version record what produced the pages;
+        a change to either re-extracts, reusing OCR text when the bytes are unchanged
+    ──► chunks table: one physical page per chunk, cut at headings and clause markers,
+        EPADS footer removed, heading carried across pages, token count approximate
+        until F006. documents.chunk_fingerprint rebuilds a document's chunks only when
+        its pages or the chunker changed
     ──► embeddings (pgvector) + full-text index (tsvector)
 ```
 
