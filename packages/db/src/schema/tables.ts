@@ -65,6 +65,10 @@ export const documents = pgTable(
     // epads/bidding-document.pdf is the same file as ngc_p96607; importing both would
     // chunk one passage twice and make retrieval look corroborated when it is not.
     contentSha256: text('content_sha256').notNull(),
+    // The hash the pages were extracted from. Null means never extracted; a value
+    // different from contentSha256 means the file changed and the pages are stale.
+    // Without it, extraction cannot tell "already done" from "done against old bytes".
+    extractedSha256: text('extracted_sha256'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

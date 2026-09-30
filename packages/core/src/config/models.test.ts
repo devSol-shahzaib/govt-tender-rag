@@ -5,6 +5,7 @@ const validEnv = {
   OPENAI_MAIN_MODEL: 'main-model-id',
   OPENAI_CHEAP_MODEL: 'cheap-model-id',
   OPENAI_EMBEDDING_MODEL: 'embedding-model-id',
+  OPENAI_VISION_MODEL: 'vision-model-id',
 };
 
 describe('loadModelConfig', () => {
@@ -13,6 +14,7 @@ describe('loadModelConfig', () => {
       main: 'main-model-id',
       cheap: 'cheap-model-id',
       embedding: 'embedding-model-id',
+      vision: 'vision-model-id',
     });
   });
 

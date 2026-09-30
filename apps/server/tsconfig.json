@@ -6,7 +6,8 @@
     "paths": {
       "@tender/core": ["../../packages/core/src/index.ts"],
       "@tender/db": ["../../packages/db/src/index.ts"]
-    }
+    },
+    "lib": ["ES2023", "DOM"]
   },
   "include": ["src"]
 }

@@ -17,6 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.78",
     "ai": "^7.0.107",
     "zod": "^4.1.13"
   },

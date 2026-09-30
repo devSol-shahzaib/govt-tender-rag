@@ -12,12 +12,15 @@ export interface ModelConfig {
   readonly main: string;
   readonly cheap: string;
   readonly embedding: string;
+  /** Reads page images in F004. Vision is a capability, not a tier, so it is its own ID. */
+  readonly vision: string;
 }
 
 const modelEnvSchema = z.object({
   OPENAI_MAIN_MODEL: z.string().min(1),
   OPENAI_CHEAP_MODEL: z.string().min(1),
   OPENAI_EMBEDDING_MODEL: z.string().min(1),
+  OPENAI_VISION_MODEL: z.string().min(1),
 });
 
 /**
@@ -41,6 +44,7 @@ export function loadModelConfig(
     main: parsed.data.OPENAI_MAIN_MODEL,
     cheap: parsed.data.OPENAI_CHEAP_MODEL,
     embedding: parsed.data.OPENAI_EMBEDDING_MODEL,
+    vision: parsed.data.OPENAI_VISION_MODEL,
   };
 }
 

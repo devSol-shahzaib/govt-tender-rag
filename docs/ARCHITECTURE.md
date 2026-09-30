@@ -31,20 +31,23 @@ tender-rag-project/
     server/                  Node backend: HTTP API and ingestion jobs
       src/config/            env (Zod validated), logger, cors
       src/middleware/        errorHandler, validate, requestLogger
-      src/modules/           health, documents; ingestion, retrieval, answers (planned)
+      src/modules/           health, documents, ingestion; retrieval, answers (planned)
         documents/           manifest parsing, corpus coverage, hashing, import
-      src/scripts/           import-corpus and other one-off entry points
-      src/jobs/              pg-boss handlers (planned, F004)
+        ingestion/           page text extraction, OCR fallback for unreadable pages
+      src/scripts/           import-corpus, extract-pages and other entry points
+      src/jobs/              pg-boss handlers (planned; ingestion runs as CLI scripts for now)
       src/utils/             AppError and shared helpers
   packages/
     core/                    domain logic: retrieval, answer generation, prompts, LLM gateway
       src/config/models.ts   model IDs, read from env
-      src/llm/               the only place that calls model or embedding APIs
-      src/prompts/           versioned prompt files
+      src/llm/               gateway: the only place that calls a model provider. Retry,
+                             usage and cost per call, and a stub gateway for tests
+      src/prompts/           versioned prompt files (page-ocr.v1)
     db/                      connection string rules, Drizzle schema, migrations
       src/schema/            tenants, tenders, documents, pages, chunks
       src/client.ts          opens a connection; callers own closing it
-      drizzle/               generated migrations, applied by a privileged role
+      drizzle/               generated migrations (0000 schema, 0001 extraction tracking),
+                             applied by a privileged role
     evals/                   eval runner and golden sets (Module 2)
     mcp-server/              MCP server exposing tender tools (Module 5)
   .claude/commands/          custom Claude Code commands
@@ -94,8 +97,11 @@ with the database schema in `packages/db` rather than per module.
 sources.csv ──► tenders + documents (one document row per file, grouped by tender)
             ──► amendment order comes from documents.published_on alone, never from
                 doc_type or the manifest's free-text version label (D004)
-PDF ──► per-page text (pdf.js) ──► pages without text go to OCR (vision model)
+PDF ──► per-page text (pdf.js)
+    ──► only pages with under 20 extractable characters go to OCR, through the gateway
+        (vision model, D005). 62 of 5816 pages. Every other page keeps its text layer
     ──► pages table (document_id, physical page number, text, extraction method)
+    ──► documents.extracted_sha256 records which bytes the pages came from
     ──► chunks table (text, page range, section heading, token count)
     ──► embeddings (pgvector) + full-text index (tsvector)
 ```
@@ -125,7 +131,15 @@ client that proves the cross-origin path, and a CI workflow.
 
 F002 done: Drizzle schema and migrations for `tenants`, `tenders`, `documents`, `pages` and
 `chunks`, every table carrying `tenant_id`. CI runs migrations against a Postgres service
-container and asserts the extensions exist. No rows yet, no model calls, no UI.
+container and asserts the extensions exist.
+
+F003 done: `sources.csv` imports into 48 tenders and 64 documents, idempotently, with a
+coverage check in both directions before anything is written.
+
+F004 done, full run deferred: page extraction and the OCR fallback are built and tested, and
+the LLM gateway exists. Only a three-page OCR sample has run, so `pages` holds 3 rows. The
+full run, 5816 pages of which 62 go to OCR, happens with ingestion. No chunks, embeddings or
+UI yet.
 
 Local Postgres 17.11 runs in Docker (container `tender-db`, databases `tender_dev` and
 `tender_test`) with the `vector` and `pg_trgm` extensions loaded. Two roles: migrations use a
