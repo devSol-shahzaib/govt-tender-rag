@@ -5,4 +5,4 @@ export * from './schema/index.js';
 // Re-exported so consumers do not take a direct dependency on drizzle-orm. The ORM
 // stays an implementation detail of this package, which is the one that owns
 // persistence. Add operators here as they are actually needed.
-export { and, eq } from 'drizzle-orm';
+export { and, asc, eq } from 'drizzle-orm';
