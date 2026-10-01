@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../client.js';
-import { chunks, documents, pages, tenants, tenders } from './index.js';
+import { chunks, documents, EMBEDDING_DIMENSIONS, pages, tenants, tenders } from './index.js';
 
 const connectionString = process.env.TEST_DATABASE_URL;
 
@@ -243,6 +243,67 @@ describeWithDb('tender schema', () => {
         }),
       ).rejects.toThrow();
     });
+  });
+
+  it('stores an embedding of the configured length and rejects any other', async () => {
+    await inRollback(async (tx) => {
+      const tenant = await seedTenant(tx);
+      const [tender] = await tx
+        .insert(tenders)
+        .values({
+          tenantId: tenant.id,
+          reference: 'pakpost_p102751',
+          agency: 'Pak Post',
+          title: 'T',
+        })
+        .returning();
+      if (tender === undefined) throw new Error('tender insert returned nothing');
+      const [document] = await tx
+        .insert(documents)
+        .values({
+          tenantId: tenant.id,
+          tenderId: tender.id,
+          filePath: 'epads/pakpost_p102751_bidding_document.pdf',
+          docType: 'bidding_document',
+          publishedOn: '2026-08-24',
+          contentSha256: 'f'.repeat(64),
+        })
+        .returning();
+      if (document === undefined) throw new Error('document insert returned nothing');
+
+      const base = { tenantId: tenant.id, documentId: document.id, firstPage: 1, lastPage: 1 };
+      const embedding = Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => i / 10_000);
+      const [stored] = await tx
+        .insert(chunks)
+        .values({ ...base, text: 'right length', embedding, embeddingModel: 'model-a' })
+        .returning();
+
+      expect(stored?.embedding).toHaveLength(EMBEDDING_DIMENSIONS);
+      expect(stored?.embedding?.[1]).toBeCloseTo(0.0001);
+      expect(stored?.embeddingModel).toBe('model-a');
+
+      // A vector from a model with another size must never be stored next to these.
+      await expect(
+        tx.insert(chunks).values({ ...base, text: 'wrong length', embedding: [0.1, 0.2, 0.3] }),
+      ).rejects.toThrow();
+    });
+  });
+
+  it('indexes embeddings with HNSW on cosine distance', async () => {
+    const client = postgres(url, { max: 1 });
+
+    try {
+      const [column] = await client<{ type: string }[]>`
+        SELECT format_type(atttypid, atttypmod) AS type FROM pg_attribute
+        WHERE attrelid = 'chunks'::regclass AND attname = 'embedding'`;
+      const [index] = await client<{ indexdef: string }[]>`
+        SELECT indexdef FROM pg_indexes WHERE indexname = 'chunks_embedding_hnsw_idx'`;
+
+      expect(column?.type).toBe(`vector(${String(EMBEDDING_DIMENSIONS)})`);
+      expect(index?.indexdef).toMatch(/USING hnsw \(embedding vector_cosine_ops\)/);
+    } finally {
+      await client.end();
+    }
   });
 
   it('leaves nothing behind, so the suite can run repeatedly', async () => {

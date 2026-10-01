@@ -9,6 +9,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  vector,
 } from 'drizzle-orm/pg-core';
 import { docTypeEnum, extractionMethodEnum } from './enums.js';
 
@@ -117,11 +118,16 @@ export const pages = pgTable(
 );
 
 /**
- * A retrievable piece of text with the page range it came from.
- *
- * No embedding column yet. The vector dimension is a property of the embedding model,
- * and F006 chooses that model by measurement. Declaring a dimension now would bake in
- * a guess and create a standing reason not to change it.
+ * Length of every stored embedding: text-embedding-3-small's native size (F006). It is
+ * fixed in the column type, so a model with another size needs a migration, and the
+ * embedding job checks the configured size against the live column before any paid call.
+ * Under 2000, the most an HNSW index on `vector` supports.
+ */
+export const EMBEDDING_DIMENSIONS = 1536;
+
+/**
+ * A retrievable piece of text from one physical page, with its embedding once F006's
+ * job has run.
  */
 export const chunks = pgTable(
   'chunks',
@@ -133,18 +139,27 @@ export const chunks = pgTable(
     documentId: uuid('document_id')
       .notNull()
       .references(() => documents.id, { onDelete: 'cascade' }),
-    // Inclusive range. A chunk may span pages, and a citation needs both ends.
+    // Always equal: a chunk never crosses a page (D021). Kept as a range so citations
+    // read the same whether or not that rule is ever relaxed.
     firstPage: integer('first_page').notNull(),
     lastPage: integer('last_page').notNull(),
     sectionHeading: text('section_heading'),
     text: text('text').notNull(),
-    // Approximate until F006: characters divided by 4. The exact count depends on the
-    // embedding model's tokenizer, which F006 chooses.
+    // Exact, in the embedding model's tokenizer.
     tokenCount: integer('token_count'),
+    // Null until embedded. A rebuilt chunk is a new row, so it starts null and is paid
+    // for once; an unchanged chunk keeps its vector (D021).
+    embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSIONS }),
+    // Which model made the vector. A chunk whose model differs from the configured one
+    // is embedded again, so switching models never leaves a mix that cannot be compared.
+    embeddingModel: text('embedding_model'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index('chunks_document_idx').on(table.documentId),
+    // Cosine distance, since OpenAI embeddings are normalised and compared by angle. HNSW
+    // rather than IVFFlat: it builds incrementally and needs no training data or tuning.
+    index('chunks_embedding_hnsw_idx').using('hnsw', table.embedding.op('vector_cosine_ops')),
     check('chunks_first_page_positive', sql`${table.firstPage} >= 1`),
     check('chunks_page_range_ordered', sql`${table.lastPage} >= ${table.firstPage}`),
   ],

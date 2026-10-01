@@ -47,7 +47,8 @@ tender-rag-project/
       src/schema/            tenants, tenders, documents, pages, chunks
       src/client.ts          opens a connection; callers own closing it
       drizzle/               generated migrations (0000 schema, 0001 to 0003 extraction and
-                             chunk tracking), applied by a privileged role
+                             chunk tracking, 0004 embeddings and HNSW index), applied by
+                             a privileged role
     evals/                   eval runner and golden sets (Module 2)
     mcp-server/              MCP server exposing tender tools (Module 5)
   .claude/commands/          custom Claude Code commands

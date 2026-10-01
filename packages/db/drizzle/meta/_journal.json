@@ -29,6 +29,13 @@
       "when": 1790764977608,
       "tag": "0003_track_chunk_fingerprint",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790873695769,
+      "tag": "0004_embed_chunks",
+      "breakpoints": true
     }
   ]
 }
