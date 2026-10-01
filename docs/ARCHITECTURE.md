@@ -33,7 +33,7 @@ tender-rag-project/
       src/middleware/        errorHandler, validate, requestLogger
       src/modules/           health, documents, ingestion; retrieval, answers (planned)
         documents/           manifest parsing, corpus coverage, hashing, import
-        ingestion/           page text extraction, OCR fallback, chunking
+        ingestion/           page text extraction, OCR fallback, chunking, embedding
       src/scripts/           import-corpus, extract-pages, chunk-pages
       src/jobs/              pg-boss handlers (planned; ingestion runs as CLI scripts for now)
       src/utils/             AppError and shared helpers
@@ -108,7 +108,11 @@ PDF ──► per-page text (pdf.js)
         EPADS footer removed, heading carried across pages, sized in exact tokens of the
         embedding model's tokenizer. documents.chunk_fingerprint rebuilds a document's
         chunks only when its pages, the chunker or the tokenizer encoding changed
-    ──► embeddings (pgvector) + full-text index (tsvector)
+    ──► chunks.embedding: vectors from the embedding model through the gateway, in
+        batches, each batch committed on its own so a stopped run resumes. A chunk is
+        embedded when it has no vector or one from another model, so a rebuild pays
+        once and an unchanged chunk never pays again. HNSW index, cosine distance
+    ──► full-text index (tsvector), F008
 ```
 
 ### Question answering

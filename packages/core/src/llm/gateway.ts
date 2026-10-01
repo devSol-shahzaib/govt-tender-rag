@@ -121,6 +121,14 @@ export class Gateway {
   }
 
   /**
+   * The model embedChunks uses. Callers record it next to each vector and select
+   * chunks made by any other model, before making a call.
+   */
+  get embeddingModel(): string {
+    return this.models.embedding;
+  }
+
+  /**
    * Embeds chunk texts with the configured embedding model, in input order.
    *
    * One request per call: batching across requests is the caller's decision, since it

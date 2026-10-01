@@ -26,6 +26,11 @@ export interface StubGatewayOptions extends Omit<GatewayOptions, 'modelResolver'
    * native size of text-embedding-3-small, which F006 stores.
    */
   readonly embeddingDimensions?: number;
+  /**
+   * Embedding calls from this one on (1-based) fail with a non-retryable error. Stands
+   * in for a run that stops partway, such as a lost connection or an exhausted quota.
+   */
+  readonly failEmbeddingFromCall?: number;
 }
 
 /**
@@ -59,6 +64,7 @@ export function createStubGateway(options: StubGatewayOptions = {}): Gateway {
   const outputTokens = options.outputTokens ?? 150;
   const failWith = options.failWith;
   const embeddingDimensions = options.embeddingDimensions ?? 1536;
+  let embeddingCalls = 0;
 
   return new Gateway({
     ...options,
@@ -90,7 +96,16 @@ export function createStubGateway(options: StubGatewayOptions = {}): Gateway {
         // Matches OpenAI's limit, so a batch reaches the stub as one request, as in production.
         maxEmbeddingsPerCall: 2048,
         doEmbed: ({ values }) => {
+          embeddingCalls += 1;
           if (failWith !== undefined) return Promise.reject(failWith);
+          if (
+            options.failEmbeddingFromCall !== undefined &&
+            embeddingCalls >= options.failEmbeddingFromCall
+          ) {
+            return Promise.reject(
+              new Error(`stub embedding call ${String(embeddingCalls)} failed`),
+            );
+          }
 
           return Promise.resolve({
             embeddings: values.map((v) => stubEmbedding(v, embeddingDimensions)),
