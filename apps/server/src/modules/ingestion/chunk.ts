@@ -10,10 +10,10 @@
  * it rebuilds every document's chunks on the next run. From F006 on, rebuilding chunks
  * means paying to embed them again, so bump it only when chunking really changed.
  */
-export const CHUNKER_VERSION = 'structure-v1';
+export const CHUNKER_VERSION = 'structure-v2';
 
 /**
- * Sizes in approximate tokens. A chunk keeps growing while it is under the target and
+ * Sizes in tokens of the embedding model's tokenizer. A chunk keeps growing while it is under the target and
  * never grows past the maximum. These are starting guesses, sized so a median page
  * (about 410 tokens) becomes one or two chunks; Module 2's evals are where they get
  * tuned against retrieval quality.
@@ -29,13 +29,10 @@ export const MAX_TOKENS = 400;
 export const MIN_TOKENS = 40;
 
 /**
- * Characters divided by 4. Approximate on purpose: the exact count depends on the
- * embedding model's tokenizer, which F006 chooses. Counting exactly with a tokenizer
- * that may not match is no better than this.
+ * Counts tokens the way the embedding model will. Passed in rather than imported, so the
+ * chunker stays pure and does not decide which model it is sizing for.
  */
-export function approximateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
-}
+export type CountTokens = (text: string) => number;
 
 /**
  * The footer EPADS prints on 3412 pages, carrying the printed page number that D003
@@ -136,7 +133,7 @@ export interface ChunkedDocument {
  * whichever part holds more text. A page whose only content is small stays as it is:
  * merging across pages would break the one-page-per-chunk rule.
  */
-function mergeSmallChunks(pageChunks: Chunk[]): Chunk[] {
+function mergeSmallChunks(pageChunks: Chunk[], countTokens: CountTokens): Chunk[] {
   const merged = [...pageChunks];
   let index = 0;
 
@@ -154,15 +151,15 @@ function mergeSmallChunks(pageChunks: Chunk[]): Chunk[] {
         sectionHeading:
           first.tokenCount >= second.tokenCount ? first.sectionHeading : second.sectionHeading,
         text,
-        tokenCount: approximateTokens(text),
+        tokenCount: countTokens(text),
       };
     };
 
     const next = merged[index + 1];
     const previous = merged[index - 1];
 
-    // Measured on the joined text, not by adding the two counts: the joining newline
-    // and rounding up can push a sum of exactly MAX_TOKENS one over.
+    // Measured on the joined text, not by adding the two counts: the joining newline is
+    // a token of its own and can push a sum of exactly MAX_TOKENS one over.
     const forward = next === undefined ? undefined : combine(chunk, next);
     const backward = previous === undefined ? undefined : combine(previous, chunk);
 
@@ -205,7 +202,10 @@ function splitLongLine(line: string): string[] {
  * Headings carry across pages: a page that starts mid-section still gets that
  * section's heading. The text never crosses a page.
  */
-export function chunkDocument(pages: readonly PageText[]): ChunkedDocument {
+export function chunkDocument(
+  pages: readonly PageText[],
+  countTokens: CountTokens,
+): ChunkedDocument {
   const chunks: Chunk[] = [];
   const headingOnlyPages: number[] = [];
   const oversize: OversizeLine[] = [];
@@ -269,14 +269,14 @@ export function chunkDocument(pages: readonly PageText[]): ChunkedDocument {
         pageNumber: page.pageNumber,
         sectionHeading: open.heading,
         text,
-        tokenCount: approximateTokens(text),
+        tokenCount: countTokens(text),
       });
       open = null;
     };
 
     for (const segment of segments) {
       const segmentText = segment.lines.join('\n');
-      const segmentTokens = approximateTokens(segmentText);
+      const segmentTokens = countTokens(segmentText);
 
       // A segment too big for one chunk is split at line ends, then at sentence ends.
       if (segmentTokens > MAX_TOKENS) {
@@ -289,22 +289,22 @@ export function chunkDocument(pages: readonly PageText[]): ChunkedDocument {
             pageNumber: page.pageNumber,
             sectionHeading: segment.heading,
             text,
-            tokenCount: approximateTokens(text),
+            tokenCount: countTokens(text),
           });
           piece = [];
         };
 
         for (const line of segment.lines) {
-          const parts = approximateTokens(line) > MAX_TOKENS ? splitLongLine(line) : [line];
+          const parts = countTokens(line) > MAX_TOKENS ? splitLongLine(line) : [line];
           for (const part of parts) {
-            if (approximateTokens(part) > MAX_TOKENS) {
+            if (countTokens(part) > MAX_TOKENS) {
               oversize.push({
                 pageNumber: page.pageNumber,
-                tokenCount: approximateTokens(part),
+                tokenCount: countTokens(part),
                 preview: part.slice(0, 80),
               });
             }
-            if (piece.length > 0 && approximateTokens([...piece, part].join('\n')) > MAX_TOKENS) {
+            if (piece.length > 0 && countTokens([...piece, part].join('\n')) > MAX_TOKENS) {
               emit();
             }
             piece.push(part);
@@ -319,8 +319,8 @@ export function chunkDocument(pages: readonly PageText[]): ChunkedDocument {
       const fits =
         open !== null &&
         open.heading === segment.heading &&
-        approximateTokens(open.lines.join('\n')) < TARGET_TOKENS &&
-        approximateTokens([...open.lines, ...segment.lines].join('\n')) <= MAX_TOKENS;
+        countTokens(open.lines.join('\n')) < TARGET_TOKENS &&
+        countTokens([...open.lines, ...segment.lines].join('\n')) <= MAX_TOKENS;
 
       if (fits && open !== null) {
         open.lines.push(...segment.lines);
@@ -330,7 +330,7 @@ export function chunkDocument(pages: readonly PageText[]): ChunkedDocument {
       }
     }
     flush();
-    chunks.push(...mergeSmallChunks(pageChunks));
+    chunks.push(...mergeSmallChunks(pageChunks, countTokens));
   }
 
   return { chunks, headingOnlyPages, oversize };

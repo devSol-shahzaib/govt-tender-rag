@@ -1,3 +1,4 @@
+import type { TokenCounter } from '@tender/core';
 import { and, asc, chunks, type Database, documents, eq, pages } from '@tender/db';
 import { CHUNKER_VERSION, chunkDocument, type OversizeLine } from './chunk.js';
 import { EXTRACTOR_VERSION } from './extract.js';
@@ -29,9 +30,17 @@ export interface ChunkOptions {
   readonly tenantId?: string;
 }
 
-/** What a document's chunks were built from. Any change means the chunks are out of date. */
-export function chunkFingerprint(extractedSha256: string, extractorVersion: string): string {
-  return `${extractedSha256}:${extractorVersion}:${CHUNKER_VERSION}`;
+/**
+ * What a document's chunks were built from. Any change means the chunks are out of date.
+ * The tokenizer encoding is part of it: sizes are measured in its tokens, so a different
+ * encoding moves the cuts even when the text and the chunker are unchanged.
+ */
+export function chunkFingerprint(
+  extractedSha256: string,
+  extractorVersion: string,
+  encoding: string,
+): string {
+  return `${extractedSha256}:${extractorVersion}:${CHUNKER_VERSION}:${encoding}`;
 }
 
 /** Postgres caps a statement at 65535 parameters; 500 chunks of 7 columns stays far below. */
@@ -49,6 +58,7 @@ function percentile(sorted: readonly number[], p: number): number {
  */
 export async function chunkPages(
   db: Database,
+  tokenCounter: TokenCounter,
   options: ChunkOptions = {},
 ): Promise<ChunkingReport> {
   const started = Date.now();
@@ -85,7 +95,11 @@ export async function chunkPages(
       continue;
     }
 
-    const fingerprint = chunkFingerprint(document.extractedSha256, document.extractorVersion);
+    const fingerprint = chunkFingerprint(
+      document.extractedSha256,
+      document.extractorVersion,
+      tokenCounter.encoding,
+    );
     if (document.chunkFingerprint === fingerprint) {
       documentsSkipped += 1;
       continue;
@@ -104,6 +118,7 @@ export async function chunkPages(
 
     const result = chunkDocument(
       pageRows.map((row) => ({ pageNumber: row.pageNumber, text: row.text ?? '' })),
+      tokenCounter.count,
     );
 
     headingOnlyPages += result.headingOnlyPages.length;

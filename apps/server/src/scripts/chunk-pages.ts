@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util';
 import 'dotenv/config';
+import { createTokenCounter } from '@tender/core';
 import { createDatabase } from '@tender/db';
 import { loadConfig } from '../config/env.js';
 import { logger } from '../config/logger.js';
@@ -15,10 +16,21 @@ async function main(): Promise<void> {
 
   const dryRun = values['dry-run'] === true;
   const config = loadConfig();
+
+  // Needed even for a dry run: chunk sizes are measured in this model's tokens.
+  const embeddingModel = process.env.OPENAI_EMBEDDING_MODEL ?? '';
+  if (embeddingModel === '') {
+    throw new Error('OPENAI_EMBEDDING_MODEL is not set. See apps/server/.env.example.');
+  }
+  const tokenCounter = createTokenCounter(embeddingModel);
+
   const handle = createDatabase(config.DATABASE_URL, { max: 1 });
 
   try {
-    const report = await chunkPages(handle.db, { dryRun, documentPaths: values.document });
+    const report = await chunkPages(handle.db, tokenCounter, {
+      dryRun,
+      documentPaths: values.document,
+    });
 
     process.stdout.write(
       [
@@ -30,7 +42,7 @@ async function main(): Promise<void> {
         `  documents stale        ${String(report.documentsStale.length)}`,
         `  chunks created         ${String(report.chunksCreated)}`,
         `  heading-only pages     ${String(report.headingOnlyPages)}`,
-        `  tokens median/p90/max  ${String(report.tokens.median)}/${String(report.tokens.p90)}/${String(report.tokens.max)} (approximate)`,
+        `  tokens median/p90/max  ${String(report.tokens.median)}/${String(report.tokens.p90)}/${String(report.tokens.max)} (${tokenCounter.encoding})`,
         `  oversize lines         ${String(report.oversize.length)}`,
         `  elapsed                ${String(report.elapsedMs)}ms`,
         '',

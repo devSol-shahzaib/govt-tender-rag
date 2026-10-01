@@ -104,9 +104,9 @@ PDF ──► per-page text (pdf.js)
     ──► documents.extracted_sha256 and extractor_version record what produced the pages;
         a change to either re-extracts, reusing OCR text when the bytes are unchanged
     ──► chunks table: one physical page per chunk, cut at headings and clause markers,
-        EPADS footer removed, heading carried across pages, token count approximate
-        until F006. documents.chunk_fingerprint rebuilds a document's chunks only when
-        its pages or the chunker changed
+        EPADS footer removed, heading carried across pages, sized in exact tokens of the
+        embedding model's tokenizer. documents.chunk_fingerprint rebuilds a document's
+        chunks only when its pages, the chunker or the tokenizer encoding changed
     ──► embeddings (pgvector) + full-text index (tsvector)
 ```
 

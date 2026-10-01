@@ -3,7 +3,7 @@ import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createStubGateway } from '@tender/core';
+import { createStubGateway, createTokenCounter } from '@tender/core';
 import { chunks, createDatabase, documents, eq, pages, tenants, tenders } from '@tender/db';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { chunkPages } from './chunk-pages.js';
@@ -13,6 +13,7 @@ const connectionString = process.env.TEST_DATABASE_URL;
 const describeWithDb = connectionString === undefined ? describe.skip : describe;
 const corpusRoot = fileURLToPath(new URL('../../../../../corpus/', import.meta.url));
 const PAKPOST = 'epads/pakpost_p102751_bidding_document.pdf';
+const counter = createTokenCounter('text-embedding-3-small');
 
 describeWithDb('chunkPages', () => {
   const url = connectionString ?? '';
@@ -76,7 +77,7 @@ describeWithDb('chunkPages', () => {
   it('stores every chunk on a single page', async () => {
     const { tenantId, documentId } = await seed(PAKPOST);
 
-    const report = await chunkPages(handle.db, { tenantId });
+    const report = await chunkPages(handle.db, counter, { tenantId });
     const stored = await handle.db.select().from(chunks).where(eq(chunks.documentId, documentId));
 
     expect(report.documentsChunked).toBe(1);
@@ -86,7 +87,7 @@ describeWithDb('chunkPages', () => {
 
   it('keeps the EPADS footer out of chunks while pages keep it verbatim', async () => {
     const { tenantId, documentId } = await seed(PAKPOST);
-    await chunkPages(handle.db, { tenantId });
+    await chunkPages(handle.db, counter, { tenantId });
 
     const storedChunks = await handle.db
       .select()
@@ -104,9 +105,9 @@ describeWithDb('chunkPages', () => {
   it('builds nothing on a second run when nothing changed', async () => {
     // From F006 on, a rebuild means paying to embed every chunk again.
     const { tenantId } = await seed(PAKPOST);
-    await chunkPages(handle.db, { tenantId });
+    await chunkPages(handle.db, counter, { tenantId });
 
-    const second = await chunkPages(handle.db, { tenantId });
+    const second = await chunkPages(handle.db, counter, { tenantId });
 
     expect(second.documentsSkipped).toBe(1);
     expect(second.chunksCreated).toBe(0);
@@ -114,24 +115,35 @@ describeWithDb('chunkPages', () => {
 
   it('rebuilds when the fingerprint no longer matches, replacing rather than adding', async () => {
     const { tenantId, documentId } = await seed(PAKPOST);
-    const first = await chunkPages(handle.db, { tenantId });
+    const first = await chunkPages(handle.db, counter, { tenantId });
 
     // Stands in for a new chunker or extractor version.
     await handle.db
       .update(documents)
       .set({ chunkFingerprint: 'older-inputs' })
       .where(eq(documents.id, documentId));
-    const second = await chunkPages(handle.db, { tenantId });
+    const second = await chunkPages(handle.db, counter, { tenantId });
 
     const stored = await handle.db.select().from(chunks).where(eq(chunks.documentId, documentId));
     expect(second.documentsChunked).toBe(1);
     expect(stored.length).toBe(first.chunksCreated);
   });
 
+  it('rebuilds when the tokenizer encoding changes, since sizes are measured in it', async () => {
+    const { tenantId } = await seed(PAKPOST);
+    await chunkPages(handle.db, counter, { tenantId });
+
+    const other = { ...counter, encoding: 'another_encoding' };
+    const second = await chunkPages(handle.db, other, { tenantId });
+
+    expect(second.documentsChunked).toBe(1);
+    expect(second.documentsSkipped).toBe(0);
+  });
+
   it('reports a document with no pages instead of skipping it quietly', async () => {
     const { tenantId } = await seed(PAKPOST, { extract: false });
 
-    const report = await chunkPages(handle.db, { tenantId });
+    const report = await chunkPages(handle.db, counter, { tenantId });
 
     expect(report.documentsWithoutPages).toEqual([PAKPOST]);
     expect(report.chunksCreated).toBe(0);
@@ -144,7 +156,7 @@ describeWithDb('chunkPages', () => {
       .set({ extractorVersion: 'lines-v1' })
       .where(eq(documents.id, documentId));
 
-    const report = await chunkPages(handle.db, { tenantId });
+    const report = await chunkPages(handle.db, counter, { tenantId });
 
     expect(report.documentsStale).toEqual([PAKPOST]);
     expect(await handle.db.select().from(chunks).where(eq(chunks.documentId, documentId))).toEqual(
@@ -155,7 +167,7 @@ describeWithDb('chunkPages', () => {
   it('writes nothing on a dry run but reports what it would build', async () => {
     const { tenantId, documentId } = await seed(PAKPOST);
 
-    const report = await chunkPages(handle.db, { tenantId, dryRun: true });
+    const report = await chunkPages(handle.db, counter, { tenantId, dryRun: true });
 
     expect(report.chunksCreated).toBeGreaterThan(0);
     expect(await handle.db.select().from(chunks).where(eq(chunks.documentId, documentId))).toEqual(
