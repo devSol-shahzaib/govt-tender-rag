@@ -9,3 +9,4 @@ export {
 export { isRetryable, withRetry, type RetryOptions } from './retry.js';
 export { GatewayError, type GatewayResult, type ModelPricing, type Usage } from './types.js';
 export { createStubGateway, type StubGatewayOptions } from './testing.js';
+export { createTokenCounter, type TokenCounter } from './tokens.js';
