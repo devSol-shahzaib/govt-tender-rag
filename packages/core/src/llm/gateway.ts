@@ -1,5 +1,6 @@
 import { createOpenAI } from '@ai-sdk/openai';
-import { generateText, type LanguageModel } from 'ai';
+import { embedMany, generateText, type EmbeddingModel, type LanguageModel } from 'ai';
+import { z } from 'zod';
 import { loadModelConfig, type ModelConfig } from '../config/models.js';
 import { withRetry, type RetryOptions } from './retry.js';
 import { GatewayError, type GatewayResult, type ModelPricing, type Usage } from './types.js';
@@ -34,6 +35,8 @@ export interface GatewayOptions {
   readonly apiKey?: string;
   /** Supplied by tests and by D009's load testing. No network call happens. */
   readonly modelResolver?: (modelId: string) => LanguageModel;
+  /** The embedding counterpart of modelResolver. */
+  readonly embeddingModelResolver?: (modelId: string) => EmbeddingModel;
   readonly pricing?: Readonly<Record<string, ModelPricing>>;
   readonly retry?: RetryOptions;
   readonly onCall?: (event: CallEvent) => void;
@@ -45,6 +48,16 @@ export interface CallEvent {
   readonly usage: Usage;
   readonly attempts: number;
   readonly durationMs: number;
+}
+
+export interface EmbedChunksRequest {
+  readonly texts: readonly string[];
+  /**
+   * The length every vector must have. Supplied by the caller because it is a property
+   * of where the vectors go, the database column, and a response that would not fit
+   * there must fail here rather than at insert.
+   */
+  readonly dimensions: number;
 }
 
 export interface ReadPageImageRequest {
@@ -73,9 +86,18 @@ function toUsage(
   };
 }
 
+/**
+ * One vector per input, each of the expected length, every value a finite number (Zod 4
+ * rejects NaN and Infinity in z.number()). A provider response is an external boundary.
+ */
+function embeddingsSchema(count: number, dimensions: number) {
+  return z.array(z.array(z.number()).length(dimensions)).length(count);
+}
+
 export class Gateway {
   private readonly models: ModelConfig;
   private readonly resolve: (modelId: string) => LanguageModel;
+  private readonly resolveEmbedding: (modelId: string) => EmbeddingModel;
   private readonly pricing: Readonly<Record<string, ModelPricing>>;
   private readonly retry: RetryOptions;
   private readonly onCall: ((event: CallEvent) => void) | undefined;
@@ -88,17 +110,71 @@ export class Gateway {
     this.retry = options.retry ?? {};
     this.onCall = options.onCall;
 
-    if (options.modelResolver !== undefined) {
-      this.resolve = options.modelResolver;
-    } else {
-      const openai = createOpenAI({ apiKey: options.apiKey ?? process.env.OPENAI_API_KEY });
-      this.resolve = (modelId) => openai(modelId);
+    // Created lazily: a gateway built entirely from resolvers, as in tests, never needs it.
+    let openai: ReturnType<typeof createOpenAI> | undefined;
+    const provider = () =>
+      (openai ??= createOpenAI({ apiKey: options.apiKey ?? process.env.OPENAI_API_KEY }));
+
+    this.resolve = options.modelResolver ?? ((modelId) => provider()(modelId));
+    this.resolveEmbedding =
+      options.embeddingModelResolver ?? ((modelId) => provider().embedding(modelId));
+  }
+
+  /**
+   * Embeds chunk texts with the configured embedding model, in input order.
+   *
+   * One request per call: batching across requests is the caller's decision, since it
+   * owns what a failed batch means. The SDK's own retries are off so that retry lives in
+   * one place, here.
+   */
+  async embedChunks(request: EmbedChunksRequest): Promise<GatewayResult<number[][]>> {
+    if (request.texts.length === 0) {
+      throw new Error('embedChunks needs at least one text; an empty batch is a caller bug.');
     }
+
+    const modelId = this.models.embedding;
+    const result = await this.call(
+      'embedChunks',
+      modelId,
+      this.resolveEmbedding(modelId),
+      async (model) => {
+        const response = await embedMany({
+          model,
+          values: [...request.texts],
+          maxRetries: 0,
+          maxParallelCalls: 1,
+        });
+
+        return {
+          value: response.embeddings,
+          inputTokens: response.usage.tokens,
+          outputTokens: 0,
+        };
+      },
+    );
+
+    // Checked after the call, outside retry: a malformed response is not a transient
+    // failure, and asking again would pay twice for the same wrong answer.
+    const parsed = embeddingsSchema(request.texts.length, request.dimensions).safeParse(
+      result.value,
+    );
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      throw new GatewayError(
+        `embedChunks returned unusable vectors from ${modelId} for ${String(request.texts.length)} ` +
+          `texts at ${String(request.dimensions)} dimensions: ${issue?.message ?? 'invalid'} ` +
+          `at ${issue?.path.join('.') ?? '?'}`,
+        result.attempts,
+      );
+    }
+
+    return { ...result, value: parsed.data };
   }
 
   /** Reads a rendered page image and returns its text. Used by F004's OCR fallback. */
   async readPageImage(request: ReadPageImageRequest): Promise<GatewayResult<string>> {
-    return this.call('readPageImage', this.models.vision, async (model) => {
+    const modelId = this.models.vision;
+    return this.call('readPageImage', modelId, this.resolve(modelId), async (model) => {
       const result = await generateText({
         model,
         ...(this.visionReasoningEffort === undefined
@@ -123,17 +199,21 @@ export class Gateway {
     });
   }
 
-  private async call<T>(
+  /**
+   * The model is resolved once by the caller, not per attempt, so a retry reuses the
+   * same client rather than building a new one.
+   */
+  private async call<M, T>(
     operation: string,
     modelId: string,
-    run: (model: LanguageModel) => Promise<{
+    model: M,
+    run: (model: M) => Promise<{
       value: T;
       inputTokens: number | undefined;
       outputTokens: number | undefined;
     }>,
   ): Promise<GatewayResult<T>> {
     const started = Date.now();
-    const model = this.resolve(modelId);
 
     let outcome;
     try {

@@ -1,6 +1,7 @@
-import { MockLanguageModelV4 } from 'ai/test';
+import { MockEmbeddingModelV4, MockLanguageModelV4 } from 'ai/test';
 import { describe, expect, it, vi } from 'vitest';
 import { Gateway } from './gateway.js';
+import { createStubGateway, stubEmbedding } from './testing.js';
 import { GatewayError } from './types.js';
 
 const MODELS = {
@@ -200,5 +201,123 @@ describe('Gateway reasoning effort', () => {
     await gateway.readPageImage(request);
 
     expect(seen[0]?.providerOptions).toBeUndefined();
+  });
+});
+
+/** An embedding model that answers each call from the next entry, then repeats the last. */
+function embeddingMock(answers: ((values: string[]) => number[][] | Error)[], tokens = 42) {
+  let call = 0;
+  const model = new MockEmbeddingModelV4({
+    // OpenAI accepts 2048 inputs per request. The mock defaults to 1, which would make
+    // embedMany split every batch into single-text requests.
+    maxEmbeddingsPerCall: 2048,
+    doEmbed: ({ values }) => {
+      const answer = answers[Math.min(call, answers.length - 1)];
+      call += 1;
+      const result = answer?.(values) ?? [];
+      if (result instanceof Error) return Promise.reject(result);
+      return Promise.resolve({ embeddings: result, usage: { tokens }, warnings: [] });
+    },
+  });
+  return { model, calls: () => call };
+}
+
+const DIMS = 4;
+const vectorsFor = (values: string[]) => values.map((_, i) => [i, 0.5, -0.5, 0.25]);
+
+describe('Gateway.embedChunks', () => {
+  it('returns one vector per text, in order, from the configured embedding model', async () => {
+    const { model } = embeddingMock([vectorsFor]);
+    const gateway = new Gateway({ models: MODELS, embeddingModelResolver: () => model });
+
+    const result = await gateway.embedChunks({ texts: ['a', 'b', 'c'], dimensions: DIMS });
+
+    expect(result.value.map((v) => v[0])).toEqual([0, 1, 2]);
+    expect(result.model).toBe('embedding-id');
+  });
+
+  it('records input tokens and prices them, with no output tokens', async () => {
+    const { model } = embeddingMock([vectorsFor], 1_000_000);
+    const gateway = new Gateway({
+      models: MODELS,
+      embeddingModelResolver: () => model,
+      pricing: { 'embedding-id': { inputPerMillionUsd: 0.02, outputPerMillionUsd: 0 } },
+    });
+
+    const result = await gateway.embedChunks({ texts: ['a'], dimensions: DIMS });
+
+    expect(result.usage.inputTokens).toBe(1_000_000);
+    expect(result.usage.outputTokens).toBe(0);
+    expect(result.usage.costUsd).toBeCloseTo(0.02, 6);
+  });
+
+  it('fails when the response has a different number of vectors than texts', async () => {
+    const { model, calls } = embeddingMock([(values) => vectorsFor(values).slice(1)]);
+    const gateway = new Gateway({ models: MODELS, embeddingModelResolver: () => model });
+
+    await expect(gateway.embedChunks({ texts: ['a', 'b'], dimensions: DIMS })).rejects.toThrow(
+      GatewayError,
+    );
+    // Not retried: asking again would pay twice for the same wrong answer.
+    expect(calls()).toBe(1);
+  });
+
+  it('fails when a vector has the wrong length for the column it is going into', async () => {
+    const { model } = embeddingMock([(values) => values.map(() => [0.1, 0.2, 0.3])]);
+    const gateway = new Gateway({ models: MODELS, embeddingModelResolver: () => model });
+
+    await expect(gateway.embedChunks({ texts: ['a'], dimensions: DIMS })).rejects.toThrow(
+      /4 dimensions/,
+    );
+  });
+
+  it('fails when a vector holds a value that is not a finite number', async () => {
+    const { model } = embeddingMock([(values) => values.map(() => [0.1, Number.NaN, 0.3, 0.4])]);
+    const gateway = new Gateway({ models: MODELS, embeddingModelResolver: () => model });
+
+    await expect(gateway.embedChunks({ texts: ['a'], dimensions: DIMS })).rejects.toThrow(
+      GatewayError,
+    );
+  });
+
+  it('retries a rate limit itself, with the SDK retrying nothing on its own', async () => {
+    const rateLimited = Object.assign(new Error('rate limited'), { statusCode: 429 });
+    const { model, calls } = embeddingMock([() => rateLimited, vectorsFor]);
+    const gateway = new Gateway({
+      models: MODELS,
+      embeddingModelResolver: () => model,
+      retry: { ...noWait, maxAttempts: 3 },
+    });
+
+    const result = await gateway.embedChunks({ texts: ['a'], dimensions: DIMS });
+
+    expect(result.attempts).toBe(2);
+    expect(calls()).toBe(2);
+  });
+
+  it('refuses an empty batch without making a call', async () => {
+    const { model, calls } = embeddingMock([vectorsFor]);
+    const gateway = new Gateway({ models: MODELS, embeddingModelResolver: () => model });
+
+    await expect(gateway.embedChunks({ texts: [], dimensions: DIMS })).rejects.toThrow(/empty/);
+    expect(calls()).toBe(0);
+  });
+});
+
+describe('stub embeddings', () => {
+  it('gives the same text the same unit vector and other text an unrelated one', async () => {
+    const gateway = createStubGateway();
+
+    const { value } = await gateway.embedChunks({
+      texts: ['Bid security', 'Bid security', 'Delivery period'],
+      dimensions: 1536,
+    });
+    const dot = (a: number[], b: number[]) => a.reduce((sum, x, i) => sum + x * (b[i] ?? 0), 0);
+    const [first, same, other] = value as [number[], number[], number[]];
+
+    expect(first).toEqual(same);
+    expect(dot(first, first)).toBeCloseTo(1, 6);
+    expect(Math.abs(dot(first, other))).toBeLessThan(0.2);
+    expect(first).toEqual(stubEmbedding('Bid security', 1536));
   });
 });
