@@ -34,14 +34,15 @@ tender-rag-project/
       src/modules/           health, documents, ingestion; retrieval, answers (planned)
         documents/           manifest parsing, corpus coverage, hashing, import
         ingestion/           page text extraction, OCR fallback, chunking, embedding
-      src/scripts/           import-corpus, extract-pages, chunk-pages
+      src/scripts/           import-corpus, extract-pages, chunk-pages, embed-chunks
       src/jobs/              pg-boss handlers (planned; ingestion runs as CLI scripts for now)
       src/utils/             AppError and shared helpers
   packages/
     core/                    domain logic: retrieval, answer generation, prompts, LLM gateway
       src/config/models.ts   model IDs, read from env
       src/llm/               gateway: the only place that calls a model provider. Retry,
-                             usage and cost per call, and a stub gateway for tests
+                             usage and cost per call, embeddings checked for count and
+                             length, exact token counts, and a stub gateway for tests
       src/prompts/           versioned prompt files (page-ocr.v1)
     db/                      connection string rules, Drizzle schema, migrations
       src/schema/            tenants, tenders, documents, pages, chunks
@@ -152,7 +153,13 @@ for ingestion.
 
 F005 done: pages keep their line breaks and are chunked on document structure, one physical
 page per chunk. 8227 chunks, about 250 tokens each and never more than 400. Chunks are
-rebuilt only when their fingerprint changes. No embeddings or UI yet.
+rebuilt only when their fingerprint changes. F006 later rechunked them to 7694 with real
+token counts.
+
+F006 done: chunks are sized in exact `cl100k_base` tokens and every one has a 1536-dimension
+`text-embedding-3-small` vector in `chunks.embedding`, with an HNSW cosine index. The
+embedding job runs in resumable batches and embeds only chunks with no vector or one from
+another model. No retrieval or UI yet.
 
 Local Postgres 17.11 runs in Docker (container `tender-db`, databases `tender_dev` and
 `tender_test`) with the `vector` and `pg_trgm` extensions loaded. Two roles: migrations use a

@@ -1,6 +1,6 @@
 # F006: Embeddings and indexing
 
-**Status:** Approved
+**Status:** Done
 **Module:** 0
 **Branch:** feat/006-embeddings
 
@@ -61,18 +61,18 @@ Rejected:
 - The schema comment on `chunks` that says a chunk may span pages is corrected; D021 says it never does.
 
 ## Acceptance criteria
-- [ ] `token_count` comes from the embedding model's tokenizer, and no chunk exceeds 400 real tokens apart from a reported line that cannot be split
-- [ ] Rechunking to `structure-v2` happens before embedding, and the chunking checks from F005 still hold: one page per chunk, no EPADS footer, `Clarification Date:` with its value
-- [ ] The dry run reports chunks to embed, exact tokens and estimated cost, and makes 0 model calls
-- [ ] Every one of the 8227 (or rechunked) chunks has an embedding of the configured dimension and `embedding_model` set
-- [ ] A second run with nothing changed makes 0 calls
-- [ ] Rechunking one document re-embeds only that document's chunks
-- [ ] A run stopped partway through resumes without re-embedding finished batches
-- [ ] A dimension mismatch between config and the column fails before any call
-- [ ] A response with the wrong vector count or length fails loudly, with a test
-- [ ] The HNSW index exists and a query uses it: `EXPLAIN` shows an index scan
-- [ ] Sanity check: for a sample of chunks, the nearest neighbour of a chunk's own embedding is that chunk
-- [ ] No real embedding calls in tests
+- [x] `token_count` comes from the embedding model's tokenizer, and no chunk exceeds 400 real tokens apart from a reported line that cannot be split
+- [x] Rechunking to `structure-v2` happens before embedding, and the chunking checks from F005 still hold: one page per chunk, no EPADS footer, `Clarification Date:` with its value
+- [x] The dry run reports chunks to embed, exact tokens and estimated cost, and makes 0 model calls
+- [x] Every one of the 7694 rechunked chunks has an embedding of the configured dimension and `embedding_model` set
+- [x] A second run with nothing changed makes 0 calls
+- [x] Rechunking one document re-embeds only that document's chunks
+- [x] A run stopped partway through resumes without re-embedding finished batches
+- [x] A dimension mismatch between config and the column fails before any call
+- [x] A response with the wrong vector count or length fails loudly, with a test
+- [x] The HNSW index exists and a query uses it: `EXPLAIN` shows an index scan
+- [x] Sanity check: for a sample of chunks, the nearest neighbour of a chunk's own embedding is that chunk
+- [x] No real embedding calls in tests
 
 ## Measurement
 Recorded in the build log: chunk count after rechunking, real token median, p90 and max, how far characters over four was off, total tokens embedded, number of calls, cost, runtime, index build time and size.
@@ -85,4 +85,13 @@ Recorded in the build log: chunk count after rechunking, real token median, p90 
 5. Table-of-contents pages and scrambled tables (F005 risks 1 and 2) get embedded like any other text. Their effect shows up in F007 and Module 2, not here.
 
 ## Notes from the build
-Filled in during and after building.
+- Real token counts lowered the chunk count (8227 to 7694), against the prediction in risk 3.
+- The tokenizer's dry-run total matched the API's usage exactly: 1,600,859 tokens.
+- Duplicates, for F007: 4433 of 7694 chunks share their exact text with another. 3571 across different tenders, 674 across documents of one tender, 188 within one document, and 378 texts in both an original and a later amendment. Near-copies (same template, different values) are the larger risk: a wrong answer with a real citation.
+- Proposed defence, in layers:
+  1. F007: tender scope as a hard SQL filter applied before ranking (exact search within a tender is fast; iterative HNSW scan for corpus-wide queries).
+  2. F007: group exact duplicates by text hash, citing the most recently published document (D004).
+  3. F008: keyword search, so exact values (agency names, dates, amounts) count, not only meaning.
+  4. F009: every citation checked in code before it is shown. The chunk must have been retrieved and belong to the scoped tender, and the quoted text must appear in it word for word; otherwise the claim is dropped.
+  5. Module 2: a wrong-tender citation rate, measured on questions that pair near-copy tenders.
+- Open for F007: store a text hash on chunks or compute it at query time, and how to scope a question that is meant to span tenders.
