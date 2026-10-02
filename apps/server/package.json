@@ -10,7 +10,8 @@
     "test": "vitest run",
     "import:corpus": "tsx src/scripts/import-corpus.ts",
     "extract:pages": "tsx src/scripts/extract-pages.ts",
-    "chunk:pages": "tsx src/scripts/chunk-pages.ts"
+    "chunk:pages": "tsx src/scripts/chunk-pages.ts",
+    "embed:chunks": "tsx src/scripts/embed-chunks.ts"
   },
   "dependencies": {
     "@tender/core": "workspace:*",
